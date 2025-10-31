@@ -2,7 +2,7 @@
  * 主应用组件
  * 渲染所有同步的弹窗
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PopupWindow } from './components/PopupWindow';
 import { AdminPanel } from './components/AdminPanel';
 import { WallBorders } from './components/WallBorders';
@@ -24,6 +24,32 @@ function App() {
     dragWindow,
     releaseWindow
   } = useSocket();
+
+  // ✅ 定期清理超时的捕获窗口（防止窗口残留）
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const timeout = 10000; // 10秒超时
+      
+      setCapturedWindows(prev => {
+        const newMap = new Map(prev);
+        let cleaned = 0;
+        
+        for (const [windowId, captured] of newMap.entries()) {
+          // 检查窗口是否超时（使用窗口的时间戳）
+          if (captured.window.timestamp && now - captured.window.timestamp > timeout) {
+            newMap.delete(windowId);
+            cleaned++;
+            console.warn(`🧹 [超时清理] 捕获窗口 ${windowId.slice(0, 8)} 超过 ${timeout}ms 未完成，强制清理`);
+          }
+        }
+        
+        return cleaned > 0 ? newMap : prev;
+      });
+    }, 2000); // 每2秒检查一次
+
+    return () => clearInterval(cleanupInterval);
+  }, [setCapturedWindows]);
 
   // 如果在管理后台，显示管理界面
   if (showAdmin) {

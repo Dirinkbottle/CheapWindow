@@ -37,7 +37,7 @@ export const useSocket = (): UseSocketReturn => {
   const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (settings?.enable_debug_logs !== '0') {
+    if (settings?.enable_debug_logs === '1') {
       console.log('========================================');
       console.log('🔧 [Socket调试] 初始化WebSocket连接');
       console.log('🔧 [Socket调试] 服务器地址:', SOCKET_URL);
@@ -270,22 +270,30 @@ export const useSocket = (): UseSocketReturn => {
           return newMap;
         });
         
-        // 延迟删除窗口，让撕裂动画播放（使用配置的时长 + 100ms 缓冲）
+        // ✅ 使用 requestAnimationFrame 延迟删除窗口，避免主线程阻塞
         const animationDuration = settings?.tear_animation_duration 
           ? parseInt(settings.tear_animation_duration) 
           : 1500;
-        setTimeout(() => {
-          setWindows(prev => {
-            const newMap = new Map(prev);
-            newMap.delete(windowId);
-            return newMap;
-          });
-          setUserVectorsMap(prev => {
-            const newMap = new Map(prev);
-            newMap.delete(windowId);
-            return newMap;
-          });
-        }, animationDuration + 100); // 动画时长 + 100ms 缓冲
+        
+        const startTime = performance.now();
+        const cleanup = () => {
+          const elapsed = performance.now() - startTime;
+          if (elapsed >= animationDuration + 100) {
+            setWindows(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(windowId);
+              return newMap;
+            });
+            setUserVectorsMap(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(windowId);
+              return newMap;
+            });
+          } else {
+            requestAnimationFrame(cleanup);
+          }
+        };
+        requestAnimationFrame(cleanup);
       } else {
         // 没有向量数据，直接删除
         setWindows(prev => {

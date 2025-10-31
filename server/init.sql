@@ -110,6 +110,8 @@ INSERT INTO settings (`key`, `value`, description) VALUES
 ('wall_json_file_path', 'data/wall_assignments.json', 'JSON持久化文件路径'),
 ('mysql_write_delay', '100', 'MySQL/JSON批量写入延迟（毫秒）'),
 ('wall_lock_duration', '4500', '墙壁动画锁定时长（毫秒，自动计算）'),
+('wall_capture_confirm_timeout', '2000', '墙壁捕获确认超时时间（毫秒）'),
+('wall_lock_auto_cleanup_interval', '1000', '墙壁锁自动清理间隔（毫秒）'),
 ('enable_performance_monitor', '1', '是否启用性能监控 (0=关闭, 1=开启)'),
 ('performance_log_threshold', '50', '性能日志阈值（毫秒，超过则记录警告）')
 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);

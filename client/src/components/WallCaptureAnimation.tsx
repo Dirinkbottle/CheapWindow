@@ -42,36 +42,54 @@ export const WallCaptureAnimation = ({
   console.log(`🎬 [捕获动画] 初始化动画 - 边缘: ${edge}, 起始位置: (${initialPos.x.toFixed(1)}%, ${initialPos.y.toFixed(1)}%)`);
 
   useEffect(() => {
-    const timers: number[] = [];
+    let isCleanedUp = false;
 
-    // 阶段1：移动到中心
-    timers.push(setTimeout(() => {
-      setAnimationState('scaling');
-    }, moveSpeed) as unknown as number);
-
-    // 阶段2：放大和淡出
-    timers.push(setTimeout(() => {
-      setAnimationState('fading');
-    }, moveSpeed + captureDuration) as unknown as number);
-
-    // 阶段3：完成
+    // ✅ 使用 requestAnimationFrame 替代 setTimeout，避免主线程阻塞
+    const startTime = performance.now();
     const totalDuration = moveSpeed + captureDuration + 500;
-    timers.push(setTimeout(() => {
-      console.log(`✅ [动画完成] 窗口 ${windowData.id.slice(0, 8)} 动画播放完成，调用 onComplete`);
-      onComplete();
-    }, totalDuration) as unknown as number);
+
+    const animate = (currentTime: number) => {
+      if (isCleanedUp) return;
+      
+      const elapsed = currentTime - startTime;
+
+      // 阶段1：移动到中心
+      if (elapsed >= moveSpeed && animationState === 'moving') {
+        setAnimationState('scaling');
+      }
+
+      // 阶段2：放大和淡出
+      if (elapsed >= moveSpeed + captureDuration && animationState === 'scaling') {
+        setAnimationState('fading');
+      }
+
+      // 阶段3：完成
+      if (elapsed >= totalDuration) {
+        console.log(`✅ [动画完成] 窗口 ${windowData.id.slice(0, 8)} 动画播放完成，调用 onComplete`);
+        onComplete();
+        return;
+      }
+
+      // 继续下一帧
+      requestAnimationFrame(animate);
+    };
+
+    const rafId = requestAnimationFrame(animate);
     
-    // ✅ 强制清理定时器（防止动画卡住）
+    // ✅ 强制清理定时器（防止动画卡住）- 保留作为最后保障
     const forceCleanupTimer = setTimeout(() => {
-      console.warn(`⚠️ [强制清理] 窗口 ${windowData.id.slice(0, 8)} 动画超时，强制清理`);
-      onComplete();
-    }, totalDuration + 1000) as unknown as number; // 额外1秒容错
+      if (!isCleanedUp) {
+        console.warn(`⚠️ [强制清理] 窗口 ${windowData.id.slice(0, 8)} 动画超时，强制清理`);
+        onComplete();
+      }
+    }, totalDuration + 2000) as unknown as number; // 额外2秒容错
 
     return () => {
-      timers.forEach(timer => clearTimeout(timer));
+      isCleanedUp = true;
+      cancelAnimationFrame(rafId);
       clearTimeout(forceCleanupTimer);
     };
-  }, [moveSpeed, captureDuration, onComplete, windowData.id]);
+  }, [moveSpeed, captureDuration, onComplete, windowData.id, animationState]);
 
   // 计算当前变换
   const getTransformStyle = (): React.CSSProperties => {

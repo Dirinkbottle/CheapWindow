@@ -15,6 +15,7 @@ export class WindowManager {
     this.config = null;
     this.generatorIntervalId = null;
     this.physicsIntervalId = null;
+    this.wallLockCleanupIntervalId = null;
     this.gridPositions = [];
     this.currentGridIndex = 0;
     
@@ -296,6 +297,13 @@ export class WindowManager {
       this.physicsIntervalId = null;
     }
 
+    // ✅ 清理墙壁锁自动清理定时器
+    if (this.wallLockCleanupIntervalId) {
+      clearInterval(this.wallLockCleanupIntervalId);
+      this.wallLockCleanupIntervalId = null;
+      console.log('✓ 墙壁锁清理任务已停止');
+    }
+
     this.physicsEngine.stop();
     this.physicsEngine.clear();
   }
@@ -305,6 +313,13 @@ export class WindowManager {
    */
   startPhysicsBroadcast() {
     if (this.physicsIntervalId) return;
+
+    // ✅ 启动墙壁锁自动清理定时器
+    const cleanupInterval = parseInt(this.config?.wall_lock_auto_cleanup_interval || '1000');
+    this.wallLockCleanupIntervalId = setInterval(() => {
+      this.cleanupExpiredLocks();
+    }, cleanupInterval);
+    console.log(`✅ [墙壁锁清理] 自动清理任务已启动 (间隔: ${cleanupInterval}ms)`);
 
     this.physicsIntervalId = setInterval(async () => {
       // 重置本帧墙壁捕获标记
@@ -430,10 +445,11 @@ export class WindowManager {
                 windowId: collision.windowId
               });
               
-              // ✅ 步骤6: 设置2秒超时，未确认则回滚
+              // ✅ 步骤6: 设置超时，未确认则回滚（超时时间可配置）
+              const confirmTimeout = parseInt(this.config.wall_capture_confirm_timeout || '2000');
               const timeoutId = setTimeout(() => {
                 if (this.pendingCaptures.has(captureId)) {
-                  console.warn(`⚠️ [捕获超时] 捕获 ${captureId} 未在2秒内确认，回滚窗口到物理引擎`);
+                  console.warn(`⚠️ [捕获超时] 捕获 ${captureId} 未在${confirmTimeout}ms内确认，回滚窗口到物理引擎`);
                   this.pendingCaptures.delete(captureId);
                   
                   // ✅ 从防护集合中移除（允许再次捕获）
@@ -446,7 +462,7 @@ export class WindowManager {
                   // 更新统计
                   this.captureStats.timeout++;
                 }
-              }, 2000);
+              }, confirmTimeout);
               
               // 记录待确认的捕获
               this.pendingCaptures.set(captureId, {

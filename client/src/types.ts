@@ -116,6 +116,8 @@ export interface Settings {
   wall_persistence_mode: string;
   wall_json_file_path: string;
   mysql_write_delay: string;
+  wall_capture_confirm_timeout: string;
+  wall_lock_auto_cleanup_interval: string;
 }
 
 export interface WallState {
