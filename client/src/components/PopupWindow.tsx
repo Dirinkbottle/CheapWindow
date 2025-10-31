@@ -3,24 +3,29 @@
  * 支持拖动、抛投、抢夺、撕裂等交互
  */
 import React, { useRef, useState, useEffect, CSSProperties } from 'react';
-import type { WindowData, ContestedData, Point } from '../types';
+import type { WindowData, ContestedData, Point, Settings } from '../types';
 import {
   percentPointToPixel,
   pixelPointToPercent,
   calculatePercentVelocity
 } from '../utils/coordinates';
+import { TearEffect } from './TearEffect';
 
 interface PopupWindowProps {
   window: WindowData;
   contestData?: ContestedData;
+  userVectors?: Map<string, { position: Point; force: number }>;
+  settings?: Settings | null;
   onGrab: (windowId: string) => void;
-  onDrag: (windowId: string, position: Point) => void;
+  onDrag: (windowId: string, position: Point, force?: number) => void;
   onRelease: (windowId: string, velocity: Point) => void;
 }
 
 export const PopupWindow: React.FC<PopupWindowProps> = ({
   window,
   contestData,
+  userVectors,
+  settings,
   onGrab,
   onDrag,
   onRelease
@@ -28,17 +33,24 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
   const windowRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isTearing, setIsTearing] = useState(false);
+  const [showTearEffect, setShowTearEffect] = useState(false);
+  const [localPosition, setLocalPosition] = useState<Point | null>(null);
   const dragStartRef = useRef<{ position: Point; time: number } | null>(null);
   const lastPositionRef = useRef<Point>({ x: 0, y: 0 });
   const dragHistoryRef = useRef<Array<{ position: Point; time: number }>>([]);
 
   // 获取屏幕尺寸
-  const screenWidth = window.innerWidth;
-  const screenHeight = window.innerHeight;
+  const screenWidth = globalThis.innerWidth;
+  const screenHeight = globalThis.innerHeight;
 
+  // 位置优先级：多人抢夺时优先使用服务器位置，单人拖动时使用本地位置
+  const isBeingContested = contestData && contestData.userCount > 1;
+  const shouldUseLocalPosition = isDragging && localPosition && !isBeingContested;
+  const currentPosition = shouldUseLocalPosition ? localPosition : window.position;
+  
   // 转换百分比坐标为像素
   const pixelPosition = percentPointToPixel(
-    window.position,
+    currentPosition,
     screenWidth,
     screenHeight
   );
@@ -77,6 +89,7 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
 
     const clientX = e.clientX;
     const clientY = e.clientY;
+    const now = Date.now();
 
     // 转换为百分比坐标
     const percentPos = pixelPointToPercent(
@@ -85,11 +98,30 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
       screenHeight
     );
 
-    // 发送拖动事件
-    onDrag(window.id, percentPos);
+    // 计算拖动力量（基于速度）
+    let force = 1.0;
+    if (dragHistoryRef.current.length > 0) {
+      const lastDrag = dragHistoryRef.current[dragHistoryRef.current.length - 1];
+      const dt = (now - lastDrag.time) / 1000;
+      if (dt > 0 && dt < 0.1) { // 只在合理时间内计算
+        const dx = clientX - lastDrag.position.x;
+        const dy = clientY - lastDrag.position.y;
+        const speed = Math.sqrt(dx * dx + dy * dy) / dt; // 像素/秒
+        // 将速度映射到力量：0-1000像素/秒 映射到 0.5-2.0 力量
+        force = 0.5 + Math.min(speed / 1000, 1.5);
+      }
+    }
+
+    // 只在单人拖动时使用本地位置；多人抢夺时由服务器计算
+    const isContested = window.grabbedBy && window.grabbedBy.length > 1;
+    if (!isContested) {
+      setLocalPosition(percentPos);
+    }
+    
+    // 发送拖动事件到服务器，包含力量信息
+    onDrag(window.id, percentPos, force);
 
     // 记录拖动历史（用于计算速度）
-    const now = Date.now();
     dragHistoryRef.current.push({
       position: { x: clientX, y: clientY },
       time: now
@@ -109,9 +141,9 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
     e.preventDefault();
 
     setIsDragging(false);
+    setLocalPosition(null); // 清除本地位置，恢复使用服务器位置
 
     // 计算抛投速度
-    const now = Date.now();
     let velocity: Point = { x: 0, y: 0 };
 
     if (dragHistoryRef.current.length >= 2) {
@@ -153,15 +185,47 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
     }
   };
 
-  // 监听撕裂动画
+  // 监听撕裂动画 - 当收到 userVectors 时触发（只触发一次）
   useEffect(() => {
-    if (contestData && contestData.timeLeft <= 0) {
+    if (userVectors && userVectors.size > 0 && !showTearEffect) {
+      console.log('🎬 [撕裂动画] 开始播放撕裂动画', window.id);
       setIsTearing(true);
+      setShowTearEffect(true);
     }
-  }, [contestData]);
+    // 只依赖 userVectors 和 window.id，避免 showTearEffect 导致重复触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userVectors, window.id]);
 
-  // 计算样式
-  const style: CSSProperties = {
+  // 检测设备类型和性能配置
+  const isMobile = typeof window !== 'undefined' && /Android|iPhone|iPad|iPod|BlackBerry|Windows Phone/i.test(navigator.userAgent);
+  const useGPUAcceleration = settings?.enable_gpu_acceleration === '1';
+  const disableFloatOnMobile = settings?.disable_float_animation_mobile === '1';
+  
+  // 添加动画类和计算样式
+  let animationClass = '';
+  const cssVariables: Record<string, string> = {
+    '--float-x': `${window.floatAnimation.offsetX}px`,
+    '--float-y': `${window.floatAnimation.offsetY}px`,
+    '--float-duration': `${window.floatAnimation.duration}s`,
+  };
+
+  if (isTearing) {
+    animationClass = 'tear-animation';
+  } else if (contestData && contestData.userCount > 1) {
+    // 只有多人抢夺时才显示抖动动画
+    animationClass = 'shake-animation';
+    cssVariables['--shake-intensity'] = `${contestData.shakeIntensity}px`;
+  } else if (!isDragging && !window.isDragging) {
+    // 移动端根据配置决定是否禁用浮动动画
+    const shouldFloat = !(isMobile && disableFloatOnMobile);
+    if (shouldFloat) {
+      animationClass = 'float-animation';
+    }
+  }
+
+  // 根据 GPU 加速配置决定定位方式
+  const style: CSSProperties = useGPUAcceleration ? {
+    // GPU 加速模式：使用 transform3d
     position: 'fixed',
     left: `${pixelPosition.x}px`,
     top: `${pixelPosition.y}px`,
@@ -182,57 +246,87 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
     userSelect: 'none',
     touchAction: 'none',
     zIndex: isDragging ? 1000 : 100,
-    transition: isDragging ? 'none' : 'all 0.1s ease-out',
+    transform: `translate3d(-50%, -50%, 0)`,
+    transition: isDragging ? 'none' : 'left 0.1s ease-out, top 0.1s ease-out',
+    willChange: 'transform',
+    ...cssVariables
+  } : {
+    // 传统模式：使用 left/top
+    position: 'fixed',
+    left: `${pixelPosition.x}px`,
+    top: `${pixelPosition.y}px`,
+    width: `${window.size.width}px`,
+    height: `${window.size.height}px`,
+    backgroundColor: window.colors.bg,
+    color: window.colors.text,
+    borderRadius: '12px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '15px',
+    textAlign: 'center',
+    fontSize: `${window.fontSize}px`,
+    fontFamily: 'Microsoft YaHei, sans-serif',
+    cursor: isDragging ? 'grabbing' : 'grab',
+    userSelect: 'none',
+    touchAction: 'none',
+    zIndex: isDragging ? 1000 : 100,
+    transition: isDragging ? 'none' : 'left 0.1s ease-out, top 0.1s ease-out',
     transform: 'translate(-50%, -50%)',
-    
-    // CSS变量用于动画
-    ['--float-x' as string]: `${window.floatAnimation.offsetX}px`,
-    ['--float-y' as string]: `${window.floatAnimation.offsetY}px`,
-    ['--float-duration' as string]: `${window.floatAnimation.duration}s`,
+    ...cssVariables
   };
-
-  // 添加动画类
-  let animationClass = '';
-  if (isTearing) {
-    animationClass = 'tear-animation';
-  } else if (contestData) {
-    animationClass = 'shake-animation';
-    style['--shake-intensity' as string] = `${contestData.shakeIntensity}px`;
-  } else if (!isDragging && !window.isDragging) {
-    animationClass = 'float-animation';
-  }
 
   return (
     <>
-      <div
-        ref={windowRef}
-        className={`popup-window ${animationClass}`}
-        style={style}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        <div className="popup-content">
-          {window.message}
-        </div>
-
-        {/* 抢夺倒计时UI */}
-        {contestData && !isTearing && (
-          <div className="contest-indicator">
-            <div
-              className="contest-progress"
-              style={{
-                width: `${contestData.progress * 100}%`,
-                backgroundColor: contestData.progress > 0.7 ? '#ff4444' : '#ffaa00'
-              }}
-            />
-            <div className="contest-text">
-              {contestData.userCount} 人抢夺中！{Math.ceil(contestData.timeLeft / 1000)}s
-            </div>
+      {/* 显示撕裂动画或正常窗口 */}
+      {showTearEffect && userVectors && userVectors.size > 0 && settings ? (
+        <TearEffect
+          window={window}
+          contestData={contestData || {
+            windowId: window.id,
+            userCount: userVectors.size,
+            timeLeft: 0,
+            shakeIntensity: userVectors.size * 2,
+            progress: 1
+          }}
+          userVectors={userVectors}
+          pixelPosition={pixelPosition}
+          settings={settings}
+          onComplete={() => {
+            if (settings?.enable_debug_logs === '1') {
+              console.log('🎬 [撕裂动画] 动画完成', window.id);
+            }
+            setShowTearEffect(false);
+            // 动画完成后窗口会被服务器移除
+          }}
+        />
+      ) : (
+        <div
+          ref={windowRef}
+          className={`popup-window ${animationClass}`}
+          style={{
+            ...style,
+            opacity: isTearing ? 0 : 1,
+            display: isTearing ? 'none' : 'flex'
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          <div className="popup-content">
+            {window.message}
           </div>
-        )}
-      </div>
+          
+          {/* 抢夺指示器 - 根据配置显示 */}
+          {settings?.show_contest_indicator === '1' && isBeingContested && contestData && (
+            <div className="contest-indicator">
+              {contestData.userCount} 人抢夺中 - {Math.ceil(contestData.timeLeft / 1000)}s
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CSS样式 */}
       <style>{`
@@ -333,32 +427,29 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
         /* 抢夺指示器 */
         .contest-indicator {
           position: absolute;
-          bottom: -30px;
+          top: -30px;
           left: 50%;
           transform: translateX(-50%);
-          width: 120%;
-          background: rgba(0, 0, 0, 0.8);
-          border-radius: 8px;
-          padding: 5px;
-          font-size: 11px;
-          font-weight: bold;
+          background: rgba(255, 87, 34, 0.95);
           color: white;
-          text-align: center;
+          padding: 4px 12px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: bold;
+          white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(255, 87, 34, 0.4);
+          pointer-events: none;
+          z-index: 10;
+          animation: contest-pulse 0.5s ease-in-out infinite;
         }
 
-        .contest-progress {
-          position: absolute;
-          top: 0;
-          left: 0;
-          height: 100%;
-          border-radius: 8px;
-          transition: width 0.1s linear, background-color 0.3s;
-          opacity: 0.3;
-        }
-
-        .contest-text {
-          position: relative;
-          z-index: 1;
+        @keyframes contest-pulse {
+          0%, 100% { 
+            transform: translateX(-50%) scale(1); 
+          }
+          50% { 
+            transform: translateX(-50%) scale(1.05); 
+          }
         }
       `}</style>
     </>

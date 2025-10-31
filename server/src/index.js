@@ -9,6 +9,8 @@ import dotenv from 'dotenv';
 import { testConnection } from './db.js';
 import { Message, Setting } from './models/Message.js';
 import { WindowManager } from './windowManager.js';
+import { WallManager } from './wallManager.js';
+import { perfMonitor } from './performanceMonitor.js';
 
 dotenv.config();
 
@@ -16,15 +18,19 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST']
+    origin: '*', // 允许所有来源访问（生产环境建议设置具体域名）
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
 const PORT = process.env.PORT || 3001;
 
 // 中间件
-app.use(cors());
+app.use(cors({
+  origin: '*', // 允许所有来源访问（生产环境建议设置具体域名）
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -34,8 +40,20 @@ app.use(express.static('public'));
 // 窗口管理器实例
 let windowManager = null;
 
+// 墙壁管理器实例
+let wallManager = null;
+
 // 在线用户管理
-const onlineUsers = new Map(); // userId -> socketId
+const onlineUsers = new Map(); // userId -> { socketId, isMobile }
+
+/**
+ * 检测是否为移动设备
+ */
+function isMobileDevice(userAgent) {
+  if (!userAgent) return false;
+  const ua = userAgent.toLowerCase();
+  return /android|iphone|ipad|ipod|blackberry|windows phone|mobile/i.test(ua);
+}
 
 // ==================== REST API 路由 ====================
 
@@ -207,26 +225,193 @@ app.post('/api/reset', async (req, res) => {
   }
 });
 
+/**
+ * ✅ 获取性能监控数据
+ */
+app.get('/api/performance', (req, res) => {
+  try {
+    const perfStats = perfMonitor.getStats();
+    const perfStatus = perfMonitor.getStatus();
+    const wallStats = wallManager ? wallManager.getStats() : null;
+    const captureStats = windowManager ? windowManager.getCaptureStats() : null;
+    
+    res.json({
+      success: true,
+      data: {
+        performance: perfStats,
+        monitor: perfStatus,
+        walls: wallStats,
+        capture: captureStats,
+        onlineUsers: onlineUsers.size,
+        windows: windowManager ? windowManager.physicsEngine.getWindowCount() : 0
+      }
+    });
+  } catch (error) {
+    console.error('获取性能数据失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取性能数据失败'
+    });
+  }
+});
+
+/**
+ * ✅ 更新性能监控配置
+ */
+app.post('/api/performance/config', (req, res) => {
+  try {
+    const { enabled, threshold } = req.body;
+    
+    if (enabled !== undefined) {
+      perfMonitor.setEnabled(enabled);
+    }
+    if (threshold !== undefined) {
+      perfMonitor.setThreshold(threshold);
+    }
+    
+    res.json({
+      success: true,
+      message: '配置已更新',
+      config: perfMonitor.getStatus()
+    });
+  } catch (error) {
+    console.error('更新配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '更新配置失败'
+    });
+  }
+});
+
+/**
+ * ✅ 重置性能监控数据
+ */
+app.post('/api/performance/reset', (req, res) => {
+  try {
+    perfMonitor.reset();
+    res.json({
+      success: true,
+      message: '性能数据已重置'
+    });
+  } catch (error) {
+    console.error('重置性能数据失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '重置失败'
+    });
+  }
+});
+
+/**
+ * ✅ 更新墙壁管理器配置
+ */
+app.post('/api/walls/config', (req, res) => {
+  try {
+    if (!wallManager) {
+      return res.status(400).json({
+        success: false,
+        message: '墙壁系统未初始化'
+      });
+    }
+    
+    const { persistenceMode, jsonFilePath, writeDelay } = req.body;
+    wallManager.updateConfig({ persistenceMode, jsonFilePath, writeDelay });
+    
+    res.json({
+      success: true,
+      message: '墙壁配置已更新',
+      config: wallManager.getStats()
+    });
+  } catch (error) {
+    console.error('更新墙壁配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '更新失败'
+    });
+  }
+});
+
 // ==================== Socket.IO 事件处理 ====================
 
 io.on('connection', async (socket) => {
   const userId = socket.id;
-  console.log(`[用户连接] ${userId}`);
+  const clientIp = socket.handshake.address;
+  const userAgent = socket.handshake.headers['user-agent'];
+  const isMobile = isMobileDevice(userAgent);
   
-  // 添加到在线用户
-  onlineUsers.set(userId, socket.id);
+  console.log('========================================');
+  console.log('✅ [用户连接] 新用户已连接');
+  console.log(`   📌 Socket ID: ${userId}`);
+  console.log(`   📌 客户端IP: ${clientIp}`);
+  console.log(`   📌 设备类型: ${isMobile ? '移动设备' : '桌面设备'}`);
+  console.log(`   📌 User-Agent: ${userAgent?.slice(0, 50)}...`);
+  console.log(`   📌 传输方式: ${socket.conn.transport.name}`);
+  console.log(`   📌 当前在线: ${onlineUsers.size + 1} 人`);
+  console.log('========================================');
+  
+  // 添加到在线用户（包含设备信息）
+  onlineUsers.set(userId, { socketId: socket.id, isMobile });
 
-  // 如果是第一个用户，启动窗口生成器
+  // 如果是第一个用户，启动系统
   if (onlineUsers.size === 1) {
-    console.log('✓ 第一个用户上线，启动系统...');
-    windowManager = new WindowManager(io);
+    console.log('🚀 [系统启动] 第一个用户上线，启动系统...');
+    
+    // 读取性能配置
+    const settings = await Setting.getAll();
+    
+    // 初始化墙壁管理器
+    wallManager = new WallManager({
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '123456',
+      database: process.env.DB_NAME || 'cheap_window'
+    }, {
+      persistenceMode: settings.wall_persistence_mode || 'mysql', // memory/json/mysql
+      jsonFilePath: settings.wall_json_file_path || 'data/wall_assignments.json',
+      writeDelay: parseInt(settings.mysql_write_delay || '100'),
+      perfMonitor
+    });
+    await wallManager.initialize();
+    
+    // 初始化窗口管理器（传递wallManager）
+    windowManager = new WindowManager(io, onlineUsers, wallManager);
     await windowManager.startGenerator();
+    console.log('✅ [系统启动] 窗口生成器和墙壁系统已启动');
+  }
+
+  // 为用户分配墙壁（如果启用）
+  const settings = await Setting.getAll();
+  if (wallManager && settings.enable_wall_system === '1') {
+    const assignedWall = wallManager.assignWall(userId, socket.id);
+    if (assignedWall) {
+      console.log(`🧱 [墙壁分配] 用户 ${userId.slice(0, 8)} 分配到 ${assignedWall} 墙`);
+    } else {
+      console.log(`⏳ [墙壁等待] 用户 ${userId.slice(0, 8)} 等待墙壁空闲...`);
+    }
+    
+    // 广播墙壁状态给所有用户
+    io.emit('wall_state_updated', wallManager.getAllWalls());
+    
+    // ✅ 定期同步墙壁状态（防止缓存不一致）
+    // 只为第一个用户启动同步定时器
+    if (onlineUsers.size === 1 && !global.wallSyncInterval) {
+      global.wallSyncInterval = setInterval(() => {
+        if (wallManager && onlineUsers.size > 0) {
+          io.emit('wall_state_sync', {
+            walls: wallManager.getAllWalls(),
+            timestamp: Date.now()
+          });
+          console.log('🔄 [墙壁同步] 定期广播墙壁状态');
+        }
+      }, 10000); // 每10秒同步一次
+      console.log('✅ [墙壁同步] 定期同步任务已启动 (10秒间隔)');
+    }
   }
 
   // 发送当前所有窗口状态给新连接的用户
   const windows = windowManager.getAllWindows();
   socket.emit('sync_windows', windows);
-  console.log(`[同步窗口] 发送 ${windows.length} 个窗口给用户 ${userId}`);
+  console.log(`📦 [数据同步] 发送 ${windows.length} 个窗口给用户 ${userId.slice(0, 8)}`);
 
   /**
    * 用户抓取窗口
@@ -241,13 +426,14 @@ io.on('connection', async (socket) => {
   /**
    * 用户拖动窗口
    */
-  socket.on('drag_window', ({ windowId, position }) => {
+  socket.on('drag_window', ({ windowId, position, force }) => {
     if (!windowManager) return;
     
-    const window = windowManager.dragWindow(windowId, position);
+    // 传入 userId 和 force 用于多人拖动的向量加权计算
+    const window = windowManager.dragWindow(windowId, userId, position, force || 1.0);
     if (window) {
-      // 广播给其他用户（不包括自己，避免延迟）
-      socket.broadcast.emit('window_dragged', {
+      // 广播计算后的位置给所有用户（包括拖动者，确保同步）
+      io.emit('window_dragged', {
         windowId,
         position: window.position
       });
@@ -265,10 +451,33 @@ io.on('connection', async (socket) => {
   });
 
   /**
+   * ✅ 客户端确认捕获
+   */
+  socket.on('capture_confirmed', (captureId) => {
+    if (!windowManager) return;
+    
+    windowManager.handleCaptureConfirmation(captureId);
+  });
+
+  /**
    * 用户断开连接
    */
-  socket.on('disconnect', () => {
-    console.log(`[用户断开] ${userId}`);
+  socket.on('disconnect', async (reason) => {
+    console.log('========================================');
+    console.log('⚠️ [用户断开] 用户已断开连接');
+    console.log(`   📌 Socket ID: ${userId.slice(0, 8)}`);
+    console.log(`   📌 断开原因: ${reason}`);
+    console.log(`   📌 剩余在线: ${onlineUsers.size - 1} 人`);
+    console.log('========================================');
+    
+    // 释放用户的墙壁
+    if (wallManager) {
+      const releasedWall = wallManager.releaseWall(userId);
+      if (releasedWall) {
+        // 广播墙壁状态更新
+        io.emit('wall_state_updated', wallManager.getAllWalls());
+      }
+    }
     
     // 释放用户抓取的所有窗口
     if (windowManager) {
@@ -280,11 +489,22 @@ io.on('connection', async (socket) => {
 
     // 如果是最后一个用户，停止系统
     if (onlineUsers.size === 0) {
-      console.log('✓ 最后一个用户离线，停止系统...');
+      console.log('🛑 [系统停止] 最后一个用户离线，停止窗口生成器...');
       if (windowManager) {
         windowManager.stopGenerator();
         windowManager = null;
       }
+      if (wallManager) {
+        await wallManager.close();
+        wallManager = null;
+      }
+      // ✅ 停止墙壁状态同步定时器
+      if (global.wallSyncInterval) {
+        clearInterval(global.wallSyncInterval);
+        global.wallSyncInterval = null;
+        console.log('✅ [墙壁同步] 定期同步任务已停止');
+      }
+      console.log('✅ [系统停止] 系统已完全停止');
     }
   });
 });
@@ -304,10 +524,12 @@ async function startServer() {
       process.exit(1);
     }
 
-    // 启动HTTP服务器
-    httpServer.listen(PORT, () => {
+    // 启动HTTP服务器（监听所有网络接口，支持公网访问）
+    httpServer.listen(PORT, '0.0.0.0', () => {
       console.log('='.repeat(60));
-      console.log(`✓ 服务器运行在: http://localhost:${PORT}`);
+      console.log(`✓ 服务器运行在: http://0.0.0.0:${PORT}`);
+      console.log(`✓ 本地访问: http://localhost:${PORT}`);
+      console.log(`✓ 公网访问: http://你的公网IP:${PORT}`);
       console.log(`✓ WebSocket服务已启用`);
       console.log('='.repeat(60));
     });

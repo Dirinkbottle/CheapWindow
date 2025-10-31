@@ -13,6 +13,22 @@ export class PhysicsEngine {
   }
 
   /**
+   * 设置物理引擎帧率
+   */
+  setFPS(fps) {
+    this.fps = fps;
+    this.deltaTime = 1000 / fps;
+    
+    // 如果正在运行，重启以应用新帧率
+    if (this.isRunning) {
+      this.stop();
+      this.start();
+    }
+    
+    console.log(`✓ 物理引擎帧率已更新: ${fps} FPS`);
+  }
+
+  /**
    * 启动物理引擎
    */
   start() {
@@ -53,6 +69,10 @@ export class PhysicsEngine {
       contestStartTime: null, // 抢夺开始时间
       isDragging: false,
       lastUpdateTime: Date.now(),
+      dragVectors: new Map(), // userId -> {position, force, timestamp}
+      createTime: Date.now(), // 创建时间
+      tearBaseDuration: windowData.tearBaseDuration || 5000, // 撕裂基础时间
+      shakeIntensityMultiplier: windowData.shakeIntensityMultiplier || 2, // 抖动强度倍数
       
       // 窗口基本信息
       message: windowData.message,
@@ -108,26 +128,59 @@ export class PhysicsEngine {
   }
 
   /**
-   * 用户拖动窗口
+   * 用户拖动窗口（支持多人拖动向量加权）
    */
-  dragWindow(windowId, position) {
+  dragWindow(windowId, userId, position, force = 1.0) {
     const window = this.windows.get(windowId);
     if (!window || !window.isDragging) return null;
 
-    // 更新位置
-    const lastPosition = { ...window.position };
-    window.position = { ...position };
-    
-    // 确保在边界内
-    window.position.x = Math.max(0, Math.min(100, window.position.x));
-    window.position.y = Math.max(0, Math.min(100, window.position.y));
-
-    // 计算速度（用于后续的抛投）
     const now = Date.now();
-    const dt = (now - window.lastUpdateTime) / 1000; // 转换为秒
-    if (dt > 0) {
-      window.velocity.x = (window.position.x - lastPosition.x) / dt;
-      window.velocity.y = (window.position.y - lastPosition.y) / dt;
+    
+    // 存储该用户的拖动向量
+    window.dragVectors.set(userId, {
+      position: { ...position },
+      force: force,
+      timestamp: now
+    });
+
+    // 清理超过500ms未更新的拖动向量
+    for (const [uid, vector] of window.dragVectors.entries()) {
+      if (now - vector.timestamp > 500) {
+        window.dragVectors.delete(uid);
+      }
+    }
+
+    // 如果有多人拖动，计算加权平均位置
+    if (window.dragVectors.size > 0) {
+      let totalForce = 0;
+      let weightedX = 0;
+      let weightedY = 0;
+
+      for (const vector of window.dragVectors.values()) {
+        const weight = vector.force;
+        totalForce += weight;
+        weightedX += vector.position.x * weight;
+        weightedY += vector.position.y * weight;
+      }
+
+      const lastPosition = { ...window.position };
+      
+      // 计算加权平均位置
+      window.position = {
+        x: weightedX / totalForce,
+        y: weightedY / totalForce
+      };
+
+      // 确保在边界内
+      window.position.x = Math.max(0, Math.min(100, window.position.x));
+      window.position.y = Math.max(0, Math.min(100, window.position.y));
+
+      // 计算速度（用于后续的抛投）
+      const dt = (now - window.lastUpdateTime) / 1000; // 转换为秒
+      if (dt > 0) {
+        window.velocity.x = (window.position.x - lastPosition.x) / dt;
+        window.velocity.y = (window.position.y - lastPosition.y) / dt;
+      }
     }
     
     window.lastUpdateTime = now;
@@ -143,12 +196,16 @@ export class PhysicsEngine {
 
     // 从抓取列表中移除用户
     window.grabbedBy = window.grabbedBy.filter(id => id !== userId);
+    
+    // 从拖动向量中移除该用户
+    window.dragVectors.delete(userId);
 
     // 如果没有用户抓取，则恢复正常状态
     if (window.grabbedBy.length === 0) {
       window.isDragging = false;
       window.isContested = false;
       window.contestStartTime = null;
+      window.dragVectors.clear();
       
       // 如果提供了速度，应用抛投效果
       if (velocity) {
@@ -171,6 +228,7 @@ export class PhysicsEngine {
     const dt = this.deltaTime / 1000; // 转换为秒
     const updates = [];
     const tornWindows = [];
+    const collisions = []; // 墙壁碰撞记录
 
     for (const window of this.windows.values()) {
       let hasUpdate = false;
@@ -178,8 +236,10 @@ export class PhysicsEngine {
       // 1. 检查抢夺状态
       if (window.isContested && window.grabbedBy.length > 1) {
         const contestDuration = now - window.contestStartTime;
-        // 撕裂时间计算：基础5秒 / (抢夺人数 - 1)
-        const tearDuration = 5000 / (window.grabbedBy.length - 1);
+        // 撕裂时间计算：基础时间 / (抢夺人数 - 1)
+        // 可以通过配置调整基础时间，默认5000ms
+        const tearBaseDuration = window.tearBaseDuration || 5000;
+        const tearDuration = tearBaseDuration / (window.grabbedBy.length - 1);
         
         if (contestDuration >= tearDuration) {
           // 窗口撕裂！
@@ -201,25 +261,49 @@ export class PhysicsEngine {
 
         // 4. 边界碰撞检测和反弹
         const bounceCoefficient = 0.7; // 弹性系数
+        let hasCollision = false;
+        let collisionEdge = null;
+        
+        // 💡 保存碰撞前的真实位置（用于墙壁捕获动画）
+        const preCollisionPosition = { ...window.position };
         
         if (window.position.x <= 0) {
           window.position.x = 0;
           window.velocity.x = Math.abs(window.velocity.x) * bounceCoefficient;
           hasUpdate = true;
+          hasCollision = true;
+          collisionEdge = 'left';
         } else if (window.position.x >= 100) {
           window.position.x = 100;
           window.velocity.x = -Math.abs(window.velocity.x) * bounceCoefficient;
           hasUpdate = true;
+          hasCollision = true;
+          collisionEdge = 'right';
         }
 
         if (window.position.y <= 0) {
           window.position.y = 0;
           window.velocity.y = Math.abs(window.velocity.y) * bounceCoefficient;
           hasUpdate = true;
+          hasCollision = true;
+          collisionEdge = 'top';
         } else if (window.position.y >= 100) {
           window.position.y = 100;
           window.velocity.y = -Math.abs(window.velocity.y) * bounceCoefficient;
           hasUpdate = true;
+          hasCollision = true;
+          collisionEdge = 'bottom';
+        }
+
+        // 记录碰撞信息（用于墙壁捕获）
+        // ✅ 使用碰撞前位置，避免窗口"嵌在墙上"的问题
+        if (hasCollision && collisionEdge) {
+          collisions.push({
+            windowId: window.id,
+            edge: collisionEdge,
+            position: preCollisionPosition,  // 使用碰撞前的真实位置
+            velocity: { ...window.velocity }
+          });
         }
 
         // 5. 应用摩擦力
@@ -242,10 +326,11 @@ export class PhysicsEngine {
       }
     }
 
-    // 返回更新数据和撕裂的窗口
+    // 返回更新数据、撕裂的窗口和碰撞信息
     return {
       updates,
-      tornWindows
+      tornWindows,
+      collisions
     };
   }
 
@@ -257,9 +342,11 @@ export class PhysicsEngine {
     if (!window || !window.isContested) return null;
 
     const contestDuration = Date.now() - window.contestStartTime;
-    const tearDuration = 5000 / (window.grabbedBy.length - 1);
+    const tearBaseDuration = window.tearBaseDuration || 5000;
+    const tearDuration = tearBaseDuration / (window.grabbedBy.length - 1);
     const timeLeft = Math.max(0, tearDuration - contestDuration);
-    const shakeIntensity = window.grabbedBy.length * 2;
+    const multiplier = window.shakeIntensityMultiplier || 2;
+    const shakeIntensity = window.grabbedBy.length * multiplier;
 
     return {
       windowId: window.id,

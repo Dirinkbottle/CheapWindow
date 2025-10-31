@@ -22,7 +22,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 1. 检查并安装Node.js
-echo "步骤 1/8: 检查Node.js..."
+echo "步骤 1/9: 检查Node.js..."
 if ! command -v node &> /dev/null; then
     echo -e "${YELLOW}Node.js未安装，正在安装...${NC}"
     curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
@@ -33,7 +33,7 @@ fi
 
 # 2. 检查并安装MySQL
 echo ""
-echo "步骤 2/8: 检查MySQL..."
+echo "步骤 2/9: 检查MySQL..."
 if ! command -v mysql &> /dev/null; then
     echo -e "${YELLOW}MySQL未安装${NC}"
     echo "请手动安装MySQL 8.0:"
@@ -47,7 +47,7 @@ fi
 
 # 3. 检查并安装PM2
 echo ""
-echo "步骤 3/8: 检查PM2..."
+echo "步骤 3/9: 检查PM2..."
 if ! command -v pm2 &> /dev/null; then
     echo -e "${YELLOW}PM2未安装，正在安装...${NC}"
     sudo npm install -g pm2
@@ -57,7 +57,7 @@ fi
 
 # 4. 配置环境变量
 echo ""
-echo "步骤 4/8: 配置环境变量..."
+echo "步骤 4/9: 配置环境变量..."
 if [ ! -f "server/.env" ]; then
     echo "创建server/.env文件..."
     cat > server/.env << EOF
@@ -78,7 +78,7 @@ fi
 
 # 5. 初始化数据库
 echo ""
-echo "步骤 5/8: 初始化数据库..."
+echo "步骤 5/9: 初始化数据库..."
 echo "正在执行SQL初始化脚本..."
 
 # 读取密码
@@ -96,7 +96,7 @@ fi
 
 # 6. 安装依赖
 echo ""
-echo "步骤 6/8: 安装项目依赖..."
+echo "步骤 6/9: 安装项目依赖..."
 
 echo "  → 安装后端依赖..."
 cd server
@@ -112,7 +112,7 @@ echo -e "${GREEN}✓ 依赖安装完成${NC}"
 
 # 7. 构建前端
 echo ""
-echo "步骤 7/8: 构建前端..."
+echo "步骤 7/9: 构建前端..."
 cd client
 npm run build
 cd ..
@@ -129,11 +129,18 @@ else
     exit 1
 fi
 
-# 8. 启动服务
+# 8. 准备日志目录
 echo ""
-echo "步骤 8/8: 启动服务..."
+echo "步骤 8/9: 准备日志目录..."
+mkdir -p server/logs
+chmod 755 server/logs
+echo -e "${GREEN}✓ 日志目录已创建${NC}"
+
+# 9. 启动服务
+echo ""
+echo "步骤 9/9: 启动服务..."
 cd server
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup
 

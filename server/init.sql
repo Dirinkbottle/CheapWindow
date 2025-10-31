@@ -61,7 +61,57 @@ INSERT INTO settings (`key`, `value`, description) VALUES
 ('font_size', '14', '字体大小（基准值）'),
 ('font_random', '4', '字体大小随机范围'),
 ('float_range', '5', '浮动范围（像素）'),
-('physics_fps', '60', '物理引擎帧率')
+('physics_fps', '60', '物理引擎帧率'),
+('generation_mode', 'auto', '生成模式：auto(自动) / manual(手动)'),
+('min_window_lifetime', '10', '窗口最小存活时间（秒）'),
+('max_window_lifetime', '60', '窗口最大存活时间（秒）'),
+('enable_auto_cleanup', '1', '是否自动清理旧窗口 (1=是, 0=否)'),
+('tear_base_duration', '5000', '基础撕裂时间（毫秒）'),
+('shake_intensity_multiplier', '2', '抖动强度倍数'),
+('tear_animation_duration', '1500', '撕裂动画播放时长（毫秒）'),
+-- 客户端渲染优化
+('enable_gpu_acceleration', '1', '启用 GPU 硬件加速 (1=启用, 0=禁用)'),
+('enable_batch_rendering', '1', '启用批量渲染优化 (1=启用, 0=禁用)'),
+('disable_float_animation_mobile', '1', '移动端禁用浮动动画 (1=禁用, 0=启用)'),
+-- 服务器物理更新
+('physics_fps_mobile', '30', '物理引擎帧率（移动端）'),
+('broadcast_throttle', '1', '启用广播节流 (1=启用, 0=禁用)'),
+-- 移动端优化
+('max_windows_mobile', '10', '移动端最大窗口数'),
+('auto_detect_device', '1', '自动检测设备类型 (1=启用, 0=禁用)'),
+-- Debug 日志控制
+('enable_debug_logs', '1', '启用 Debug 日志 (1=启用, 0=禁用)'),
+-- 撕裂动画风格配置
+('tear_animation_style', 'shatter', '撕裂动画风格: gradual(逐渐破裂)/stretch(拉扯)/shatter(粉碎)'),
+('tear_performance_mode', 'balanced', '撕裂动画性能模式: high(高质量)/balanced(平衡)/performance(性能优先)'),
+-- 动画细节配置
+('tear_crack_start_ratio', '0.33', '裂纹开始生成的倒计时比例 (0-1)'),
+('tear_fragment_lifetime', '3000', '碎片存在时间（毫秒）'),
+('tear_fragment_fade_duration', '1000', '碎片淡出时间（毫秒）'),
+('tear_enable_rotation', '1', '碎片是否旋转 (1=是, 0=否)'),
+('tear_enable_scale', '0', '碎片是否缩放 (1=是, 0=否)'),
+-- 高质量模式专属
+('tear_particle_count', '50', '高质量模式额外粒子数量'),
+('tear_enable_blur', '1', '高质量模式启用模糊效果 (1=是, 0=否)'),
+('tear_enable_glow', '1', '高质量模式启用发光效果 (1=是, 0=否)'),
+-- 抢夺UI显示
+('show_contest_indicator', '1', '是否显示抢夺倒计时UI (1=显示, 0=隐藏)'),
+-- 墙壁系统
+('enable_wall_system', '1', '启用墙壁系统 (1=启用, 0=禁用)'),
+('wall_capture_duration', '3000', '窗口捕获动画总时长（毫秒）'),
+('wall_capture_scale', '3', '窗口放大倍数'),
+('wall_capture_bg_fade_multiplier', '3', '背景淡出时间倍数（相对于动画总时长）'),
+('wall_capture_text_fade_multiplier', '1', '文字淡出时间倍数（相对于动画总时长）'),
+('wall_capture_move_speed', '500', '窗口移动到中心的速度（毫秒）'),
+('wall_border_width', '8', '墙壁边框宽度（像素）'),
+('wall_proximity_threshold', '15', '窗口接近墙壁的高亮阈值（百分比距离）'),
+-- ✅ 性能优化配置
+('wall_persistence_mode', 'mysql', '墙壁持久化模式: memory(纯内存)/json(JSON文件)/mysql(MySQL数据库)'),
+('wall_json_file_path', 'data/wall_assignments.json', 'JSON持久化文件路径'),
+('mysql_write_delay', '100', 'MySQL/JSON批量写入延迟（毫秒）'),
+('wall_lock_duration', '4500', '墙壁动画锁定时长（毫秒，自动计算）'),
+('enable_performance_monitor', '1', '是否启用性能监控 (0=关闭, 1=开启)'),
+('performance_log_threshold', '50', '性能日志阈值（毫秒，超过则记录警告）')
 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
 
 -- 创建索引优化查询

@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Message, Settings } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
 export const AdminPanel: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -350,6 +350,562 @@ export const AdminPanel: React.FC = () => {
                   max="20"
                 />
                 <span className="hint">窗口浮动动画的偏移范围</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+              <h3 style={{ marginBottom: '20px', color: '#667eea' }}>高级配置</h3>
+
+              <div className="form-group">
+                <label>生成模式：</label>
+                <select
+                  value={settings.generation_mode}
+                  onChange={(e) => setSettings({ ...settings, generation_mode: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="auto">自动生成</option>
+                  <option value="manual">手动生成</option>
+                </select>
+                <span className="hint">自动模式会持续生成窗口，手动模式需要触发生成</span>
+              </div>
+
+              <div className="form-group">
+                <label>窗口最小存活时间（秒）：</label>
+                <input
+                  type="number"
+                  value={settings.min_window_lifetime}
+                  onChange={(e) => setSettings({ ...settings, min_window_lifetime: e.target.value })}
+                  min="5"
+                  max="300"
+                />
+                <span className="hint">窗口至少存在多久才会被自动清理</span>
+              </div>
+
+              <div className="form-group">
+                <label>窗口最大存活时间（秒）：</label>
+                <input
+                  type="number"
+                  value={settings.max_window_lifetime}
+                  onChange={(e) => setSettings({ ...settings, max_window_lifetime: e.target.value })}
+                  min="10"
+                  max="600"
+                />
+                <span className="hint">窗口最多存在多久后会被自动清理</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.enable_auto_cleanup === '1'}
+                    onChange={(e) => setSettings({ ...settings, enable_auto_cleanup: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用自动清理旧窗口
+                </label>
+                <span className="hint">自动清理超过存活时间的窗口，防止堆积</span>
+              </div>
+
+              <div className="form-group">
+                <label>基础撕裂时间（毫秒）：</label>
+                <input
+                  type="number"
+                  value={settings.tear_base_duration}
+                  onChange={(e) => setSettings({ ...settings, tear_base_duration: e.target.value })}
+                  min="1000"
+                  max="10000"
+                  step="500"
+                />
+                <span className="hint">多人抢夺时，窗口撕裂的基础时间（实际时间会根据人数调整）</span>
+              </div>
+
+              <div className="form-group">
+                <label>抖动强度倍数：</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={settings.shake_intensity_multiplier}
+                  onChange={(e) => setSettings({ ...settings, shake_intensity_multiplier: e.target.value })}
+                  min="0.5"
+                  max="5"
+                />
+                <span className="hint">抢夺时窗口抖动的强度系数</span>
+              </div>
+
+              <div className="form-group">
+                <label>撕裂动画时长（毫秒）：</label>
+                <input
+                  type="number"
+                  value={settings.tear_animation_duration}
+                  onChange={(e) => setSettings({ ...settings, tear_animation_duration: e.target.value })}
+                  min="500"
+                  max="5000"
+                  step="100"
+                />
+                <span className="hint">窗口撕裂动画的播放时长</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+              <h3 style={{ marginBottom: '20px', color: '#667eea' }}>⚡ 性能优化配置</h3>
+
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>
+                  🖥️ 客户端渲染优化
+                </label>
+                
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.enable_gpu_acceleration === '1'}
+                      onChange={(e) => setSettings({ ...settings, enable_gpu_acceleration: e.target.checked ? '1' : '0' })}
+                      style={{ marginRight: '10px' }}
+                    />
+                    启用 GPU 硬件加速
+                  </label>
+                  <span className="hint">使用 transform3d 提升动画流畅度（推荐开启）</span>
+                </div>
+
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.enable_batch_rendering === '1'}
+                      onChange={(e) => setSettings({ ...settings, enable_batch_rendering: e.target.checked ? '1' : '0' })}
+                      style={{ marginRight: '10px' }}
+                    />
+                    启用批量渲染优化
+                  </label>
+                  <span className="hint">合并多个更新为一次渲染，大幅提升性能（推荐开启）</span>
+                </div>
+
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.disable_float_animation_mobile === '1'}
+                      onChange={(e) => setSettings({ ...settings, disable_float_animation_mobile: e.target.checked ? '1' : '0' })}
+                      style={{ marginRight: '10px' }}
+                    />
+                    移动端禁用浮动动画
+                  </label>
+                  <span className="hint">在移动设备上禁用浮动动画，降低 CPU 占用</span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>
+                  🚀 服务器更新策略
+                </label>
+
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>桌面端物理帧率（FPS）：</label>
+                  <input
+                    type="number"
+                    value={settings.physics_fps}
+                    onChange={(e) => setSettings({ ...settings, physics_fps: e.target.value })}
+                    min="20"
+                    max="120"
+                    step="10"
+                    style={{ width: '100px', marginLeft: '10px' }}
+                  />
+                  <span className="hint">桌面设备的物理引擎更新频率（默认 60）</span>
+                </div>
+
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>移动端物理帧率（FPS）：</label>
+                  <input
+                    type="number"
+                    value={settings.physics_fps_mobile}
+                    onChange={(e) => setSettings({ ...settings, physics_fps_mobile: e.target.value })}
+                    min="10"
+                    max="60"
+                    step="5"
+                    style={{ width: '100px', marginLeft: '10px' }}
+                  />
+                  <span className="hint">移动设备的物理引擎更新频率（默认 30）</span>
+                </div>
+
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.broadcast_throttle === '1'}
+                      onChange={(e) => setSettings({ ...settings, broadcast_throttle: e.target.checked ? '1' : '0' })}
+                      style={{ marginRight: '10px' }}
+                    />
+                    启用广播节流
+                  </label>
+                  <span className="hint">合并物理更新广播，减少网络流量</span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>
+                  📱 移动端特殊配置
+                </label>
+
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.auto_detect_device === '1'}
+                      onChange={(e) => setSettings({ ...settings, auto_detect_device: e.target.checked ? '1' : '0' })}
+                      style={{ marginRight: '10px' }}
+                    />
+                    自动检测设备类型
+                  </label>
+                  <span className="hint">自动识别移动设备并应用专门优化</span>
+                </div>
+
+                <div style={{ marginLeft: '20px', marginBottom: '15px' }}>
+                  <label>移动端最大窗口数：</label>
+                  <input
+                    type="number"
+                    value={settings.max_windows_mobile}
+                    onChange={(e) => setSettings({ ...settings, max_windows_mobile: e.target.value })}
+                    min="5"
+                    max="50"
+                    style={{ width: '100px', marginLeft: '10px' }}
+                  />
+                  <span className="hint">当移动端用户超过 50% 时的最大窗口数</span>
+                </div>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+              <h3 style={{ marginBottom: '20px', color: '#667eea' }}>🎨 撕裂动画配置</h3>
+
+              <div className="form-group">
+                <label>动画风格：</label>
+                <select
+                  value={settings.tear_animation_style}
+                  onChange={(e) => setSettings({ ...settings, tear_animation_style: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    marginBottom: '5px'
+                  }}
+                >
+                  <option value="gradual">逐渐破裂 - 裂纹从中心辐射扩散</option>
+                  <option value="stretch">拉扯风格 - 沿用户拖动方向撕裂</option>
+                  <option value="shatter">粉碎风格 - 蛛网状裂纹瞬间粉碎（默认）</option>
+                </select>
+                <span className="hint">选择窗口撕裂时的视觉效果</span>
+              </div>
+
+              <div className="form-group">
+                <label>性能模式：</label>
+                <select
+                  value={settings.tear_performance_mode}
+                  onChange={(e) => setSettings({ ...settings, tear_performance_mode: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    marginBottom: '5px'
+                  }}
+                >
+                  <option value="high">高质量 - 丰富粒子效果，模糊发光</option>
+                  <option value="balanced">平衡 - 适中效果和性能（推荐）</option>
+                  <option value="performance">性能优先 - 简化效果，流畅运行</option>
+                </select>
+                <span className="hint">在视觉效果和性能之间选择平衡点</span>
+              </div>
+
+              <div className="form-group">
+                <label>裂纹开始时机（倒计时百分比）：</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={settings.tear_crack_start_ratio}
+                  onChange={(e) => setSettings({ ...settings, tear_crack_start_ratio: e.target.value })}
+                  min="0"
+                  max="0.9"
+                  style={{ width: '100px', marginLeft: '10px' }}
+                />
+                <span className="hint">0.33 表示倒计时过了 1/3 后开始生成裂纹</span>
+              </div>
+
+              <div className="form-group">
+                <label>碎片存在时间（毫秒）：</label>
+                <input
+                  type="number"
+                  value={settings.tear_fragment_lifetime}
+                  onChange={(e) => setSettings({ ...settings, tear_fragment_lifetime: e.target.value })}
+                  min="1000"
+                  max="10000"
+                  step="500"
+                />
+                <span className="hint">碎片从生成到完全消失的时间</span>
+              </div>
+
+              <div className="form-group">
+                <label>碎片淡出时间（毫秒）：</label>
+                <input
+                  type="number"
+                  value={settings.tear_fragment_fade_duration}
+                  onChange={(e) => setSettings({ ...settings, tear_fragment_fade_duration: e.target.value })}
+                  min="500"
+                  max="3000"
+                  step="100"
+                />
+                <span className="hint">碎片开始淡出到完全透明的时间</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_rotation === '1'}
+                    onChange={(e) => setSettings({ ...settings, tear_enable_rotation: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用碎片旋转效果
+                </label>
+                <span className="hint">碎片飞散时会旋转</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_scale === '1'}
+                    onChange={(e) => setSettings({ ...settings, tear_enable_scale: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用碎片缩放效果
+                </label>
+                <span className="hint">碎片飞散时会逐渐缩小</span>
+              </div>
+
+              <div className="form-group">
+                <label>高质量模式粒子数量：</label>
+                <input
+                  type="number"
+                  value={settings.tear_particle_count}
+                  onChange={(e) => setSettings({ ...settings, tear_particle_count: e.target.value })}
+                  min="0"
+                  max="200"
+                  step="10"
+                />
+                <span className="hint">高质量模式下额外生成的粒子效果数量</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_blur === '1'}
+                    onChange={(e) => setSettings({ ...settings, tear_enable_blur: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  高质量模式启用模糊效果
+                </label>
+                <span className="hint">碎片淡出时添加模糊效果</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_glow === '1'}
+                    onChange={(e) => setSettings({ ...settings, tear_enable_glow: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  高质量模式启用发光效果
+                </label>
+                <span className="hint">裂纹边缘添加发光效果</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+              <h3 style={{ marginBottom: '20px', color: '#667eea' }}>🐛 Debug 配置</h3>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.enable_debug_logs === '1'}
+                    onChange={(e) => setSettings({ ...settings, enable_debug_logs: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用 Debug 日志
+                </label>
+                <span className="hint">在浏览器控制台输出详细的调试信息（建议生产环境关闭以提升性能）</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+              <h3 style={{ marginBottom: '20px', color: '#667eea' }}>👁️ UI 显示配置</h3>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.show_contest_indicator === '1'}
+                    onChange={(e) => setSettings({ ...settings, show_contest_indicator: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  显示抢夺倒计时 UI
+                </label>
+                <span className="hint">在窗口上方显示"X 人抢夺中 - Xs"提示</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+              <h3 style={{ marginBottom: '20px', color: '#667eea' }}>🧱 墙壁系统配置</h3>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.enable_wall_system === '1'}
+                    onChange={(e) => setSettings({ ...settings, enable_wall_system: e.target.checked ? '1' : '0' })}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用墙壁系统
+                </label>
+                <span className="hint">窗口碰到屏幕边缘时会被墙壁主人捕获</span>
+              </div>
+
+              <div className="form-group">
+                <label>持久化模式</label>
+                <select
+                  value={settings.wall_persistence_mode || 'mysql'}
+                  onChange={(e) => setSettings({ ...settings, wall_persistence_mode: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    marginBottom: '5px'
+                  }}
+                >
+                  <option value="memory">纯内存模式 - 重启后数据丢失，最快</option>
+                  <option value="json">JSON文件模式 - 持久化到本地文件，轻量</option>
+                  <option value="mysql">MySQL数据库模式 - 持久化到数据库，可靠</option>
+                </select>
+                <span className="hint">选择墙壁分配数据的存储方式</span>
+              </div>
+
+              <div className="form-group">
+                <label>JSON文件路径</label>
+                <input
+                  type="text"
+                  value={settings.wall_json_file_path || 'data/wall_assignments.json'}
+                  onChange={(e) => setSettings({ ...settings, wall_json_file_path: e.target.value })}
+                />
+                <span className="hint">JSON模式下的数据文件路径（相对于服务器根目录）</span>
+              </div>
+
+              <div className="form-group">
+                <label>写入延迟（毫秒）</label>
+                <input
+                  type="number"
+                  value={settings.mysql_write_delay || '100'}
+                  onChange={(e) => setSettings({ ...settings, mysql_write_delay: e.target.value })}
+                  min="10"
+                  max="1000"
+                  step="10"
+                />
+                <span className="hint">批量写入的延迟时间，降低数据库/文件系统压力</span>
+              </div>
+
+              <div className="form-group">
+                <label>窗口捕获动画时长（毫秒）</label>
+                <input
+                  type="number"
+                  value={settings.wall_capture_duration}
+                  onChange={(e) => setSettings({ ...settings, wall_capture_duration: e.target.value })}
+                  min="1000"
+                  max="10000"
+                  step="100"
+                />
+                <span className="hint">窗口被捕获后的动画播放时长（1000-10000ms）</span>
+              </div>
+
+              <div className="form-group">
+                <label>窗口放大倍数</label>
+                <input
+                  type="number"
+                  value={settings.wall_capture_scale}
+                  onChange={(e) => setSettings({ ...settings, wall_capture_scale: e.target.value })}
+                  min="1"
+                  max="10"
+                  step="0.1"
+                />
+                <span className="hint">窗口在捕获动画中的最大放大倍数（1-10）</span>
+              </div>
+
+              <div className="form-group">
+                <label>背景淡出速度倍数</label>
+                <input
+                  type="number"
+                  value={settings.wall_capture_bg_fade_multiplier}
+                  onChange={(e) => setSettings({ ...settings, wall_capture_bg_fade_multiplier: e.target.value })}
+                  min="1"
+                  max="5"
+                  step="0.1"
+                />
+                <span className="hint">背景淡出时间 = 动画时长 × 此倍数（1-5）</span>
+              </div>
+
+              <div className="form-group">
+                <label>文字淡出速度倍数</label>
+                <input
+                  type="number"
+                  value={settings.wall_capture_text_fade_multiplier}
+                  onChange={(e) => setSettings({ ...settings, wall_capture_text_fade_multiplier: e.target.value })}
+                  min="0.5"
+                  max="3"
+                  step="0.1"
+                />
+                <span className="hint">文字淡出时间 = 动画时长 × 此倍数（0.5-3）</span>
+              </div>
+
+              <div className="form-group">
+                <label>移动到中心速度（毫秒）</label>
+                <input
+                  type="number"
+                  value={settings.wall_capture_move_speed}
+                  onChange={(e) => setSettings({ ...settings, wall_capture_move_speed: e.target.value })}
+                  min="100"
+                  max="2000"
+                  step="50"
+                />
+                <span className="hint">窗口从边缘移动到屏幕中心的时间（100-2000ms）</span>
+              </div>
+
+              <div className="form-group">
+                <label>墙壁边框宽度（像素）</label>
+                <input
+                  type="number"
+                  value={settings.wall_border_width}
+                  onChange={(e) => setSettings({ ...settings, wall_border_width: e.target.value })}
+                  min="3"
+                  max="20"
+                />
+                <span className="hint">屏幕边缘彩色边框的宽度（3-20px）</span>
+              </div>
+
+              <div className="form-group">
+                <label>窗口接近高亮阈值（%）</label>
+                <input
+                  type="number"
+                  value={settings.wall_proximity_threshold}
+                  onChange={(e) => setSettings({ ...settings, wall_proximity_threshold: e.target.value })}
+                  min="5"
+                  max="30"
+                />
+                <span className="hint">窗口距离墙壁多近时墙壁开始高亮（5-30%）</span>
               </div>
 
               <button onClick={saveSettings} disabled={loading} className="save-btn">

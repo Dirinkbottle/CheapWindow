@@ -2,9 +2,11 @@
  * 主应用组件
  * 渲染所有同步的弹窗
  */
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { PopupWindow } from './components/PopupWindow';
 import { AdminPanel } from './components/AdminPanel';
+import { WallBorders } from './components/WallBorders';
+import { WallCaptureAnimation } from './components/WallCaptureAnimation';
 import { useSocket } from './hooks/useSocket';
 
 function App() {
@@ -13,6 +15,11 @@ function App() {
     connected,
     windows,
     contestedWindows,
+    userVectorsMap,
+    settings,
+    wallState,
+    capturedWindows,
+    setCapturedWindows,
     grabWindow,
     dragWindow,
     releaseWindow
@@ -75,15 +82,48 @@ function App() {
         </div>
       )}
 
+      {/* 墙壁边框（如果启用） */}
+      {settings?.enable_wall_system === '1' && (
+        <WallBorders
+          wallState={wallState}
+          settings={settings}
+          windowPositions={Array.from(windows.values()).map(w => w.position)}
+        />
+      )}
+
       {/* 渲染所有窗口 */}
       {Array.from(windows.values()).map(window => (
         <PopupWindow
           key={window.id}
           window={window}
           contestData={contestedWindows.get(window.id)}
+          userVectors={userVectorsMap.get(window.id)}
+          settings={settings}
           onGrab={grabWindow}
           onDrag={dragWindow}
           onRelease={releaseWindow}
+        />
+      ))}
+
+      {/* 渲染捕获动画（仅墙壁主人看到） */}
+      {Array.from(capturedWindows.values()).map(captured => (
+        <WallCaptureAnimation
+          key={captured.windowId}
+          window={captured.window}
+          edge={captured.edge}
+          settings={settings}
+          onComplete={() => {
+            // ✅ 动画完成，清理捕获窗口数据
+            console.log(`✅ [捕获动画完成] ${captured.windowId.slice(0, 8)}`);
+            
+            // 从 capturedWindows Map 中删除，防止窗口残留
+            setCapturedWindows(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(captured.windowId);
+              console.log(`🗑️ [清理捕获窗口] 已删除: ${captured.windowId.slice(0, 8)}`);
+              return newMap;
+            });
+          }}
         />
       ))}
 

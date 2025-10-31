@@ -9,9 +9,11 @@ module.exports = {
       script: 'src/index.js',
       cwd: './',
       instances: 1,
+      exec_mode: 'fork',  // ✅ ES 模块必须使用 fork 模式
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
+      node_args: '--trace-warnings',  // ✅ 添加警告跟踪
       env: {
         NODE_ENV: 'production',
         PORT: 3001
