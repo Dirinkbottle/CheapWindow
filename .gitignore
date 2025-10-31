@@ -1,0 +1,65 @@
+# 依赖
+node_modules/
+.pnp
+.pnp.js
+
+# 环境变量
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+server/.env
+client/.env
+
+# 构建产物
+dist/
+build/
+client/dist/
+server/public/
+
+# 日志
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+server/logs/
+
+# PM2
+.pm2/
+ecosystem.config.js.backup
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 测试
+coverage/
+.nyc_output/
+
+# 临时文件
+*.tmp
+.cache/
+.temp/
+
+# 操作系统
+Thumbs.db
+Desktop.ini
+
+# 数据库
+*.sql.backup
+*.db
+
+# 证书和密钥
+*.pem
+*.key
+*.crt
+key.pem
+config.enc
+
