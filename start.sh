@@ -110,6 +110,16 @@ if [ "$NODE_INSTALLED" = true ] && [ "$MYSQL_INSTALLED" = true ]; then
     ((OPTION_NUMBER++))
 fi
 
+if [ "$NODE_INSTALLED" = true ] && [ -d "webgl-demo" ]; then
+    echo -e "${GREEN}[$OPTION_NUMBER]${NC} 🎨 仅启动 WebGL 演示服务"
+    echo "     • 在端口 3002 上启动演示"
+    echo "     • 需要主服务和数据库已运行"
+    echo "     • 用于参数调试和测试"
+    echo ""
+    OPTIONS[$OPTION_NUMBER]="webgl-demo"
+    ((OPTION_NUMBER++))
+fi
+
 echo -e "${GREEN}[$OPTION_NUMBER]${NC} 🔍 仅运行系统诊断"
 echo "     • 检查系统状态"
 echo "     • 不启动服务"
@@ -161,6 +171,61 @@ case "$SELECTED_METHOD" in
         else
             print_error "deploy.sh 脚本不存在"
             exit 1
+        fi
+        ;;
+        
+    webgl-demo)
+        print_header "🎨 启动 WebGL 演示服务"
+        if [ ! -d "webgl-demo" ]; then
+            print_error "webgl-demo 目录不存在"
+            exit 1
+        fi
+        
+        # 检查主服务是否运行
+        if ! curl -s -o /dev/null -w "%{http_code}" "http://localhost:3001/api/health" | grep -q "200"; then
+            print_warning "主服务 (端口 3001) 未运行"
+            echo ""
+            read -p "是否启动主服务？(y/N): " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                print_info "正在启动主服务..."
+                ./deploy.sh
+            else
+                print_error "WebGL 演示需要主服务运行才能连接数据库"
+                exit 1
+            fi
+        fi
+        
+        cd webgl-demo
+        
+        # 安装依赖
+        if [ ! -d "node_modules" ]; then
+            print_info "安装依赖..."
+            npm install
+        fi
+        
+        # 检查是否已经在运行
+        if pm2 list | grep -q "webgl-demo"; then
+            print_info "WebGL 演示服务已在运行，重启中..."
+            pm2 restart webgl-demo
+        else
+            print_info "启动 WebGL 演示服务..."
+            pm2 start server.js --name webgl-demo
+        fi
+        
+        cd ..
+        
+        # 等待服务启动
+        sleep 2
+        
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:3002/api/health" | grep -q "200"; then
+            print_success "WebGL 演示服务已启动"
+            echo ""
+            echo "访问地址: http://localhost:3002"
+            echo "查看日志: pm2 logs webgl-demo"
+            echo "停止服务: pm2 stop webgl-demo"
+        else
+            print_warning "服务可能尚未完全启动，请稍后访问"
         fi
         ;;
         

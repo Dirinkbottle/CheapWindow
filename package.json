@@ -1,0 +1,26 @@
+{
+  "name": "cheap-window",
+  "version": "1.0.0",
+  "description": "多人实时励志弹窗系统",
+  "type": "module",
+  "scripts": {
+    "check": "node check-syntax-unified.js",
+    "check:client": "cd client && npm run check",
+    "check:server": "cd server && npm run check",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "build:client": "cd client && npm run build",
+    "start:server": "cd server && npm start"
+  },
+  "keywords": [
+    "websocket",
+    "realtime",
+    "multiplayer",
+    "canvas",
+    "webgl"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+

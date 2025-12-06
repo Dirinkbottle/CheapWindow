@@ -2,7 +2,7 @@
  * Socket.IO Hook
  * 管理WebSocket连接和事件
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, startTransition } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { WindowData, PhysicsUpdate, ContestedData, Point, Settings, WallState, CapturedWindow } from '../types';
 
@@ -35,6 +35,9 @@ export const useSocket = (): UseSocketReturn => {
   const mySocketIdRef = useRef<string | null>(null);
   const updateBufferRef = useRef<PhysicsUpdate[]>([]);
   const rafIdRef = useRef<number | null>(null);
+  
+  // ✅ 批处理配置
+  const maxUpdatesPerFrame = 50; // 每帧最多更新50个窗口
 
   useEffect(() => {
     if (settings?.enable_debug_logs === '1') {
@@ -135,19 +138,22 @@ export const useSocket = (): UseSocketReturn => {
       });
     });
 
-    // 批量更新处理函数
+    // ✅ 优化的批量更新处理函数（支持分批渲染和优先级）
     const applyBatchUpdates = () => {
       if (updateBufferRef.current.length === 0) {
         rafIdRef.current = null;
         return;
       }
       
-      const updates = [...updateBufferRef.current];
-      updateBufferRef.current = [];
+      // 取出本帧要处理的更新（限制数量）
+      const updatesToProcess = updateBufferRef.current.splice(0, maxUpdatesPerFrame);
+      
+      // 如果还有剩余更新，在下一帧继续处理
+      const hasMore = updateBufferRef.current.length > 0;
       
       setWindows(prev => {
         const newMap = new Map(prev);
-        updates.forEach(update => {
+        updatesToProcess.forEach(update => {
           const window = newMap.get(update.id);
           if (window) {
             window.position = update.position;
@@ -157,7 +163,12 @@ export const useSocket = (): UseSocketReturn => {
         return newMap;
       });
       
-      rafIdRef.current = null;
+      // 如果还有待处理的更新，继续调度
+      if (hasMore) {
+        rafIdRef.current = requestAnimationFrame(applyBatchUpdates);
+      } else {
+        rafIdRef.current = null;
+      }
     };
 
     // 物理状态更新（60fps）
@@ -237,22 +248,25 @@ export const useSocket = (): UseSocketReturn => {
       }
     });
 
-    // 窗口抢夺状态
+    // 窗口抢夺状态（低优先级，使用 startTransition）
     socket.on('window_contested', (contestData: ContestedData) => {
-      setContestedWindows(prev => {
-        const newMap = new Map(prev);
-        newMap.set(contestData.windowId, contestData);
-        return newMap;
-      });
+      // 抢夺状态是视觉反馈，可以稍微延迟，不影响实际拖动
+      startTransition(() => {
+        setContestedWindows(prev => {
+          const newMap = new Map(prev);
+          newMap.set(contestData.windowId, contestData);
+          return newMap;
+        });
 
-      // 同时更新窗口状态
-      setWindows(prev => {
-        const newMap = new Map(prev);
-        const window = newMap.get(contestData.windowId);
-        if (window) {
-          window.isContested = true;
-        }
-        return newMap;
+        // 同时更新窗口状态
+        setWindows(prev => {
+          const newMap = new Map(prev);
+          const window = newMap.get(contestData.windowId);
+          if (window) {
+            window.isContested = true;
+          }
+          return newMap;
+        });
       });
     });
 
@@ -310,18 +324,21 @@ export const useSocket = (): UseSocketReturn => {
       });
     });
 
-    // 墙壁状态更新
+    // 墙壁状态更新（高优先级，用户分配墙壁时立即更新）
     socket.on('wall_state_updated', (newWallState: WallState) => {
       console.log('🧱 [墙壁状态] 墙壁状态已更新', newWallState);
       setWallState(newWallState);
     });
 
-    // ✅ 墙壁状态定期同步（防止缓存不一致）
+    // ✅ 墙壁状态定期同步（低优先级，使用 startTransition）
     socket.on('wall_state_sync', ({ walls, timestamp }: { walls: WallState; timestamp: number }) => {
       if (settings?.enable_debug_logs === '1') {
         console.log('🔄 [墙壁同步] 收到定期墙壁状态同步', { walls, timestamp });
       }
-      setWallState(walls);
+      // 使用 startTransition 降低优先级，不阻塞用户交互
+      startTransition(() => {
+        setWallState(walls);
+      });
     });
 
     // 窗口被墙壁捕获（仅墙壁主人收到）

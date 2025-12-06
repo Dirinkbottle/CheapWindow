@@ -151,6 +151,22 @@ echo ""
 # ==================== 步骤 6: 构建并启动 ====================
 print_step "步骤 6/7: 构建并启动服务..."
 echo ""
+
+# 询问是否启动 WebGL 演示
+ENABLE_WEBGL_DEMO=false
+if [ -d "webgl-demo" ]; then
+    echo ""
+    print_info "检测到 webgl-demo 目录"
+    read -p "是否启动 WebGL 演示服务 (端口 3002)? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        ENABLE_WEBGL_DEMO=true
+        print_success "将启动 WebGL 演示服务"
+    else
+        print_info "跳过 WebGL 演示服务"
+    fi
+fi
+
 print_info "正在构建 Docker 镜像（首次运行可能需要几分钟）..."
 if $COMPOSE_CMD build --no-cache; then
     print_success "镜像构建完成"
@@ -161,11 +177,22 @@ fi
 
 echo ""
 print_info "正在启动服务容器..."
-if $COMPOSE_CMD up -d; then
-    print_success "服务已启动"
+
+# 根据选择启动服务
+if [ "$ENABLE_WEBGL_DEMO" = true ]; then
+    if $COMPOSE_CMD --profile with-demo up -d; then
+        print_success "服务已启动（包含 WebGL 演示）"
+    else
+        print_error "服务启动失败"
+        exit 1
+    fi
 else
-    print_error "服务启动失败"
-    exit 1
+    if $COMPOSE_CMD up -d; then
+        print_success "服务已启动"
+    else
+        print_error "服务启动失败"
+        exit 1
+    fi
 fi
 echo ""
 
@@ -204,24 +231,57 @@ echo "📊 服务状态:"
 $COMPOSE_CMD ps
 echo ""
 echo "🌐 访问地址:"
-echo "  本地访问: http://localhost:3001"
+echo "  主应用 (本地): http://localhost:3001"
+
+if [ "$ENABLE_WEBGL_DEMO" = true ]; then
+    echo "  WebGL 演示 (本地): http://localhost:3002"
+fi
+
 if command -v curl &> /dev/null; then
     PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "获取失败")
-    echo "  公网访问: http://$PUBLIC_IP:3001"
+    echo ""
+    echo "  主应用 (公网): http://$PUBLIC_IP:3001"
+    if [ "$ENABLE_WEBGL_DEMO" = true ]; then
+        echo "  WebGL 演示 (公网): http://$PUBLIC_IP:3002"
+    fi
 fi
+
 echo ""
 echo "📝 常用命令:"
-echo "  查看日志:     $COMPOSE_CMD logs -f"
-echo "  查看应用日志:  $COMPOSE_CMD logs -f app"
+echo "  查看所有日志:   $COMPOSE_CMD logs -f"
+echo "  查看应用日志:   $COMPOSE_CMD logs -f app"
 echo "  查看数据库日志: $COMPOSE_CMD logs -f mysql"
-echo "  重启服务:     $COMPOSE_CMD restart"
-echo "  停止服务:     $COMPOSE_CMD stop"
-echo "  完全清理:     $COMPOSE_CMD down -v"
+
+if [ "$ENABLE_WEBGL_DEMO" = true ]; then
+    echo "  查看演示日志:   $COMPOSE_CMD logs -f webgl-demo"
+fi
+
+echo ""
+echo "  重启所有服务:   $COMPOSE_CMD restart"
+echo "  停止所有服务:   $COMPOSE_CMD stop"
+echo "  完全清理:       $COMPOSE_CMD down -v"
 echo ""
 echo "🔧 调试工具:"
 echo "  进入应用容器: docker exec -it cheapwindow-app sh"
 echo "  进入数据库:   docker exec -it cheapwindow-mysql mysql -uroot -p"
+
+if [ "$ENABLE_WEBGL_DEMO" = true ]; then
+    echo "  进入演示容器: docker exec -it cheapwindow-webgl-demo sh"
+fi
+
 echo ""
-print_warning "⚠️  记得修改 .env 中的默认密码！"
+echo "💡 WebGL 演示管理:"
+if [ "$ENABLE_WEBGL_DEMO" = true ]; then
+    echo "  停止演示服务: $COMPOSE_CMD stop webgl-demo"
+    echo "  启动演示服务: $COMPOSE_CMD start webgl-demo"
+else
+    echo "  启动演示服务: $COMPOSE_CMD --profile with-demo up -d webgl-demo"
+fi
+
+echo ""
+print_warning "⚠️  注意事项:"
+echo "  1. 记得修改 .env 中的默认密码"
+echo "  2. 生产环境建议使用 Nginx 反向代理"
+echo "  3. 定期备份数据: docker exec cheapwindow-mysql mysqldump -uroot -p cheap_window > backup.sql"
 echo ""
 

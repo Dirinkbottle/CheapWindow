@@ -38,6 +38,10 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
   const dragStartRef = useRef<{ position: Point; time: number } | null>(null);
   const lastPositionRef = useRef<Point>({ x: 0, y: 0 });
   const dragHistoryRef = useRef<Array<{ position: Point; time: number }>>([]);
+  
+  // ✅ 拖动节流相关状态
+  const rafIdRef = useRef<number | null>(null);
+  const pendingDragRef = useRef<{ position: Point; force: number } | null>(null);
 
   // 获取屏幕尺寸
   const screenWidth = globalThis.innerWidth;
@@ -54,6 +58,27 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
     screenWidth,
     screenHeight
   );
+
+  // ✅ 节流发送拖动事件
+  const scheduleThrottledDrag = (position: Point, force: number) => {
+    // 保存最新的拖动数据
+    pendingDragRef.current = { position, force };
+    
+    // 如果已经有一个RAF在等待，就不再创建新的
+    if (rafIdRef.current !== null) {
+      return;
+    }
+    
+    // 使用 requestAnimationFrame 进行节流
+    rafIdRef.current = requestAnimationFrame(() => {
+      if (pendingDragRef.current) {
+        const { position, force } = pendingDragRef.current;
+        onDrag(window.id, position, force);
+        pendingDragRef.current = null;
+      }
+      rafIdRef.current = null;
+    });
+  };
 
   // 处理鼠标/触摸按下
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -118,8 +143,16 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
       setLocalPosition(percentPos);
     }
     
-    // 发送拖动事件到服务器，包含力量信息
-    onDrag(window.id, percentPos, force);
+    // ✅ 根据配置决定是否使用节流
+    const dragThrottleEnabled = settings?.drag_throttle_enabled === '1';
+    
+    if (dragThrottleEnabled) {
+      // 节流模式：使用 RAF 批处理
+      scheduleThrottledDrag(percentPos, force);
+    } else {
+      // 立即发送模式（当前逻辑）
+      onDrag(window.id, percentPos, force);
+    }
 
     // 记录拖动历史（用于计算速度）
     dragHistoryRef.current.push({
@@ -178,6 +211,13 @@ export const PopupWindow: React.FC<PopupWindowProps> = ({
     // 清理
     dragStartRef.current = null;
     dragHistoryRef.current = [];
+    
+    // ✅ 清理节流RAF
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    pendingDragRef.current = null;
 
     // 释放指针捕获
     if (windowRef.current) {

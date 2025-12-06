@@ -1,6 +1,9 @@
 /**
  * 主应用组件
  * 渲染所有同步的弹窗
+ * 
+ * Phase 2 增强：
+ * - 帧同步广播（双根模式）
  */
 import { useState, useEffect } from 'react';
 import { PopupWindow } from './components/PopupWindow';
@@ -8,8 +11,15 @@ import { AdminPanel } from './components/AdminPanel';
 import { WallBorders } from './components/WallBorders';
 import { WallCaptureAnimation } from './components/WallCaptureAnimation';
 import { useSocket } from './hooks/useSocket';
+import { eventBus } from './utils/eventBus';
+import { useFrameSyncBroadcast } from './hooks/useFrameSync';
 
-function App() {
+interface AppProps {
+  isDualRootMode: boolean;
+  initialSettings?: any;
+}
+
+function App({ isDualRootMode = false }: AppProps) {
   const [showAdmin, setShowAdmin] = useState(false);
   const {
     connected,
@@ -24,32 +34,108 @@ function App() {
     dragWindow,
     releaseWindow
   } = useSocket();
+  
+  // Phase 2: 帧同步广播（双根模式）
+  useFrameSyncBroadcast(isDualRootMode, {
+    throttle: parseInt(settings?.frame_sync_throttle || '2')
+  });
 
-  // ✅ 定期清理超时的捕获窗口（防止窗口残留）
+  // ✅ 双根模式：将动画相关事件转发给 AnimationApp
   useEffect(() => {
+    if (!isDualRootMode) return;
+
+    // 转发墙壁状态更新
+    if (wallState) {
+      eventBus.emit('WALL_STATE_UPDATED', wallState);
+    }
+  }, [isDualRootMode, wallState]);
+
+  useEffect(() => {
+    if (!isDualRootMode) return;
+
+    // 转发窗口捕获事件
+    capturedWindows.forEach((captured, windowId) => {
+      eventBus.emit('WINDOW_CAPTURED', {
+        captureId: `${windowId}_${Date.now()}`,
+        windowId,
+        window: captured.window,
+        edge: captured.edge
+      });
+    });
+  }, [isDualRootMode, capturedWindows]);
+
+  useEffect(() => {
+    if (!isDualRootMode) return;
+
+    // 转发用户向量更新（用于撕裂动画）
+    userVectorsMap.forEach((vectors, windowId) => {
+      const window = windows.get(windowId);
+      if (window) {
+        const userVectors = Array.from(vectors.entries()).map(([userId, vector]) => ({
+          userId,
+          position: vector.position,
+          force: vector.force
+        }));
+        
+        eventBus.emit('WINDOW_TORN', {
+          windowId,
+          window,
+          userVectors
+        });
+      }
+    });
+  }, [isDualRootMode, userVectorsMap, windows]);
+
+  useEffect(() => {
+    if (!isDualRootMode) return;
+
+    // 转发配置更新
+    if (settings) {
+      eventBus.emit('SETTINGS_UPDATED', settings);
+    }
+  }, [isDualRootMode, settings]);
+
+  // ✅ 单根模式：定期清理超时的捕获窗口（防止窗口残留）
+  // 双根模式：此逻辑由 AnimationApp 处理
+  useEffect(() => {
+    if (isDualRootMode) return; // 双根模式下不执行
+
     const cleanupInterval = setInterval(() => {
       const now = Date.now();
-      const timeout = 10000; // 10秒超时
+      // 从配置中读取超时时间，默认10秒
+      const timeout = settings?.captured_window_cleanup_timeout 
+        ? parseInt(settings.captured_window_cleanup_timeout) 
+        : 10000;
       
       setCapturedWindows(prev => {
-        const newMap = new Map(prev);
-        let cleaned = 0;
+        // ✅ 优化：先收集需要删除的窗口ID，避免不必要的 Map 复制
+        const toDelete: string[] = [];
         
-        for (const [windowId, captured] of newMap.entries()) {
+        for (const [windowId, captured] of prev.entries()) {
           // 检查窗口是否超时（使用窗口的时间戳）
           if (captured.window.timestamp && now - captured.window.timestamp > timeout) {
-            newMap.delete(windowId);
-            cleaned++;
-            console.warn(`🧹 [超时清理] 捕获窗口 ${windowId.slice(0, 8)} 超过 ${timeout}ms 未完成，强制清理`);
+            toDelete.push(windowId);
           }
         }
         
-        return cleaned > 0 ? newMap : prev;
+        // 如果没有需要删除的，直接返回原 Map（避免不必要的重新渲染）
+        if (toDelete.length === 0) {
+          return prev;
+        }
+        
+        // 只有在需要删除时才创建新 Map
+        const newMap = new Map(prev);
+        toDelete.forEach(windowId => {
+          newMap.delete(windowId);
+          console.warn(`🧹 [超时清理] 捕获窗口 ${windowId.slice(0, 8)} 超过 ${timeout}ms 未完成，强制清理`);
+        });
+        
+        return newMap;
       });
     }, 2000); // 每2秒检查一次
 
     return () => clearInterval(cleanupInterval);
-  }, [setCapturedWindows]);
+  }, [isDualRootMode, setCapturedWindows, settings]);
 
   // 如果在管理后台，显示管理界面
   if (showAdmin) {
@@ -108,8 +194,8 @@ function App() {
         </div>
       )}
 
-      {/* 墙壁边框（如果启用） */}
-      {settings?.enable_wall_system === '1' && (
+      {/* 墙壁边框（单根模式才渲染，双根模式由 AnimationApp 渲染） */}
+      {!isDualRootMode && settings?.enable_wall_system === '1' && (
         <WallBorders
           wallState={wallState}
           settings={settings}
@@ -117,7 +203,7 @@ function App() {
         />
       )}
 
-      {/* 渲染所有窗口 */}
+      {/* 渲染所有窗口（两种模式都需要） */}
       {Array.from(windows.values()).map(window => (
         <PopupWindow
           key={window.id}
@@ -131,8 +217,8 @@ function App() {
         />
       ))}
 
-      {/* 渲染捕获动画（仅墙壁主人看到） */}
-      {Array.from(capturedWindows.values()).map(captured => (
+      {/* 渲染捕获动画（单根模式才渲染，双根模式由 AnimationApp 渲染） */}
+      {!isDualRootMode && Array.from(capturedWindows.values()).map(captured => (
         <WallCaptureAnimation
           key={captured.windowId}
           window={captured.window}

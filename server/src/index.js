@@ -11,6 +11,7 @@ import { Message, Setting } from './models/Message.js';
 import { WindowManager } from './windowManager.js';
 import { WallManager } from './wallManager.js';
 import { perfMonitor } from './performanceMonitor.js';
+import { BatchProcessor } from './batchProcessor.js';
 
 dotenv.config();
 
@@ -43,8 +44,17 @@ let windowManager = null;
 // 墙壁管理器实例
 let wallManager = null;
 
+// 批处理器实例
+let batchProcessor = null;
+
 // 在线用户管理
 const onlineUsers = new Map(); // userId -> { socketId, isMobile }
+
+// ✅ 拖动事件节流管理
+let dragBroadcastBuffer = new Map(); // windowId -> { position, timestamp, draggers: Set<userId> }
+let dragBroadcastTimer = null;
+let dragThrottleEnabled = true; // 默认启用节流
+let dragThrottleInterval = 16; // 默认16ms（60fps）
 
 /**
  * 检测是否为移动设备
@@ -53,6 +63,42 @@ function isMobileDevice(userAgent) {
   if (!userAgent) return false;
   const ua = userAgent.toLowerCase();
   return /android|iphone|ipad|ipod|blackberry|windows phone|mobile/i.test(ua);
+}
+
+/**
+ * ✅ 批量广播拖动事件（节流机制）
+ */
+function flushDragBroadcasts() {
+  if (dragBroadcastBuffer.size === 0) {
+    dragBroadcastTimer = null;
+    return;
+  }
+  
+  // 批量广播所有缓冲的拖动事件
+  for (const [windowId, data] of dragBroadcastBuffer.entries()) {
+    io.emit('window_dragged', {
+      windowId,
+      position: data.position
+    });
+  }
+  
+  // 清空缓冲区
+  dragBroadcastBuffer.clear();
+  dragBroadcastTimer = null;
+}
+
+/**
+ * ✅ 从配置加载节流设置
+ */
+async function loadDragThrottleConfig() {
+  try {
+    const settings = await Setting.getAll();
+    dragThrottleEnabled = settings.broadcast_throttle_enabled !== '0'; // 默认启用
+    dragThrottleInterval = parseInt(settings.broadcast_throttle_interval || '16');
+    console.log(`✓ 拖动事件节流配置: ${dragThrottleEnabled ? '启用' : '禁用'}, 间隔: ${dragThrottleInterval}ms`);
+  } catch (error) {
+    console.error('加载节流配置失败:', error);
+  }
 }
 
 // ==================== REST API 路由 ====================
@@ -186,6 +232,9 @@ app.put('/api/settings', async (req, res) => {
     if (windowManager) {
       await windowManager.loadConfig();
     }
+    
+    // ✅ 重新加载拖动节流配置
+    await loadDragThrottleConfig();
     
     res.json({
       success: true
@@ -359,6 +408,9 @@ io.on('connection', async (socket) => {
     // 读取性能配置
     const settings = await Setting.getAll();
     
+    // ✅ 加载拖动节流配置
+    await loadDragThrottleConfig();
+    
     // 初始化墙壁管理器
     wallManager = new WallManager({
       host: process.env.DB_HOST || 'localhost',
@@ -377,6 +429,16 @@ io.on('connection', async (socket) => {
     windowManager = new WindowManager(io, onlineUsers, wallManager);
     await windowManager.startGenerator();
     console.log('✅ [系统启动] 窗口生成器和墙壁系统已启动');
+    
+    // 初始化批处理器
+    const batchEnabled = settings.websocket_batch_enabled !== '0'; // 默认启用
+    const batchInterval = parseInt(settings.websocket_batch_interval || '33');
+    batchProcessor = new BatchProcessor(io, {
+      enabled: batchEnabled,
+      batchInterval,
+      maxBatchSize: 100
+    });
+    console.log(`✅ [批处理器] ${batchEnabled ? '已启用' : '已禁用'} (间隔: ${batchInterval}ms)`);
   }
 
   // 为用户分配墙壁（如果启用）
@@ -432,11 +494,35 @@ io.on('connection', async (socket) => {
     // 传入 userId 和 force 用于多人拖动的向量加权计算
     const window = windowManager.dragWindow(windowId, userId, position, force || 1.0);
     if (window) {
-      // 广播计算后的位置给所有用户（包括拖动者，确保同步）
-      io.emit('window_dragged', {
-        windowId,
-        position: window.position
-      });
+      // ✅ 检查是否启用节流
+      if (dragThrottleEnabled) {
+        // 节流模式：缓冲拖动事件
+        if (!dragBroadcastBuffer.has(windowId)) {
+          dragBroadcastBuffer.set(windowId, {
+            position: window.position,
+            timestamp: Date.now(),
+            draggers: new Set([userId])
+          });
+        } else {
+          const buffered = dragBroadcastBuffer.get(windowId);
+          buffered.position = window.position;
+          buffered.timestamp = Date.now();
+          buffered.draggers.add(userId);
+        }
+        
+        // 调度批量广播
+        if (!dragBroadcastTimer) {
+          dragBroadcastTimer = setTimeout(() => {
+            flushDragBroadcasts();
+          }, dragThrottleInterval);
+        }
+      } else {
+        // 非节流模式：立即广播（原有逻辑）
+        io.emit('window_dragged', {
+          windowId,
+          position: window.position
+        });
+      }
     }
   });
 

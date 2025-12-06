@@ -2,7 +2,7 @@
  * 墙壁捕获动画组件
  * 窗口被墙壁捕获后的动画效果（仅对墙壁主人播放）
  */
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, startTransition } from 'react';
 import type { WindowData, WallEdge, Settings } from '../types';
 
 interface WallCaptureAnimationProps {
@@ -53,14 +53,18 @@ export const WallCaptureAnimation = ({
       
       const elapsed = currentTime - startTime;
 
-      // 阶段1：移动到中心
+      // 阶段1：移动到中心（使用 startTransition 降低优先级）
       if (elapsed >= moveSpeed && animationState === 'moving') {
-        setAnimationState('scaling');
+        startTransition(() => {
+          setAnimationState('scaling');
+        });
       }
 
-      // 阶段2：放大和淡出
+      // 阶段2：放大和淡出（使用 startTransition 降低优先级）
       if (elapsed >= moveSpeed + captureDuration && animationState === 'scaling') {
-        setAnimationState('fading');
+        startTransition(() => {
+          setAnimationState('fading');
+        });
       }
 
       // 阶段3：完成

@@ -7,10 +7,12 @@ import type { Message, Settings } from '../types';
 
 const API_BASE = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
+type TabType = 'messages' | 'settings' | 'webgl';
+
 export const AdminPanel: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [activeTab, setActiveTab] = useState<'messages' | 'settings'>('messages');
+  const [activeTab, setActiveTab] = useState<TabType>('messages');
   const [loading, setLoading] = useState(false);
 
   // 新话语表单
@@ -153,6 +155,357 @@ export const AdminPanel: React.FC = () => {
     setLoading(false);
   };
 
+  // 更新单个配置字段
+  const updateSettingField = (key: string, value: string) => {
+    if (!settings) return;
+    setSettings({ ...settings, [key]: value });
+  };
+
+  // 折叠/展开状态
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const toggleAllSections = (expand: boolean) => {
+    const sections = ['crack_ext', 'visual_ext', 'animation_ext', 'texture', 'fragment', 'physics', 'lighting', 'camera', 'performance_ext'];
+    const newState: Record<string, boolean> = {};
+    sections.forEach(s => newState[s] = expand);
+    setExpandedSections(newState);
+  };
+
+  // 加载WebGL预设
+  const loadWebGLPreset = (preset: 'performance' | 'balanced' | 'quality' | 'extreme') => {
+    if (!settings) return;
+
+    const presets = {
+      performance: {
+        // Existing
+        tear_crack_layers: '1',
+        tear_crack_density: '0.8',
+        tear_crack_glow: '0.3',
+        tear_enable_shadow: '0',
+        tear_3d_depth: '200',
+        tear_3d_rotation_speed: '3',
+        tear_camera_fov: '60',
+        tear_enable_perspective: '1',
+        tear_particle_glass_count: '200',
+        tear_particle_sparkle_count: '50',
+        tear_particle_smoke_count: '20',
+        tear_enable_bloom: '0',
+        tear_enable_motion_blur: '0',
+        tear_enable_chromatic: '0',
+        tear_animation_total_duration: '3000',
+        tear_explosion_force: '0.8',
+        tear_slow_motion_factor: '1.0',
+        tear_texture_resolution: '1x',
+        tear_target_fps: '60',
+        tear_adaptive_quality: '1',
+        // Extended crack
+        tear_crack_width_min: '1',
+        tear_crack_width_max: '3',
+        tear_crack_branch_prob: '0.5',
+        // Extended 3D
+        tear_camera_distance: '800',
+        // Extended particles
+        tear_particle_lifetime_mult: '0.8',
+        // Visual effects extension
+        tear_bloom_threshold: '0.5',
+        tear_bloom_intensity: '0.5',
+        tear_motion_blur_samples: '3',
+        tear_motion_blur_intensity: '0.3',
+        tear_chromatic_offset: '1',
+        tear_enable_ssao: '0',
+        tear_ssao_radius: '10',
+        tear_ssao_intensity: '0.3',
+        // Animation phases
+        tear_phase_cracking_ratio: '0.3',
+        tear_phase_preparing_ratio: '0.1',
+        tear_phase_explosion_ratio: '0.05',
+        tear_phase_flying_ratio: '0.4',
+        tear_phase_fading_ratio: '0.15',
+        // Texture
+        tear_texture_filtering: 'linear',
+        tear_enable_mipmaps: '0',
+        // Fragment
+        tear_fragment_count: '30',
+        tear_fragment_thickness: '3',
+        tear_voronoi_subdivisions: '2',
+        tear_voronoi_perturbation: '10',
+        tear_enable_backface: '0',
+        // Physics
+        tear_gravity: '300',
+        tear_air_resistance: '0.02',
+        tear_rotation_damping: '0.98',
+        tear_initial_speed_mult: '1.0',
+        // Lighting
+        tear_lighting_intensity: '0.8',
+        tear_ambient_light: '0.5',
+        tear_directional_light: '0.5',
+        tear_light_dir_x: '0.5',
+        tear_light_dir_y: '-1',
+        tear_light_dir_z: '0.5',
+        tear_enable_edge_light: '0',
+        tear_edge_light_intensity: '0.5',
+        // Camera
+        tear_enable_camera_shake: '0',
+        tear_camera_shake_intensity: '5',
+        tear_camera_shake_duration: '200',
+        tear_enable_camera_tracking: '0',
+        tear_camera_tracking_smooth: '0.1',
+        // Performance
+        tear_enable_lod: '1',
+        tear_lod_distance_near: '100',
+        tear_lod_distance_far: '800',
+        tear_enable_culling: '1'
+      },
+      balanced: {
+        // Existing
+        tear_crack_layers: '2',
+        tear_crack_density: '1.0',
+        tear_crack_glow: '0.6',
+        tear_enable_shadow: '1',
+        tear_3d_depth: '300',
+        tear_3d_rotation_speed: '5',
+        tear_camera_fov: '75',
+        tear_enable_perspective: '1',
+        tear_particle_glass_count: '500',
+        tear_particle_sparkle_count: '200',
+        tear_particle_smoke_count: '50',
+        tear_enable_bloom: '1',
+        tear_enable_motion_blur: '1',
+        tear_enable_chromatic: '1',
+        tear_animation_total_duration: '4000',
+        tear_explosion_force: '1.0',
+        tear_slow_motion_factor: '1.0',
+        tear_texture_resolution: '2x',
+        tear_target_fps: '60',
+        tear_adaptive_quality: '1',
+        // Extended crack
+        tear_crack_width_min: '2',
+        tear_crack_width_max: '5',
+        tear_crack_branch_prob: '0.7',
+        // Extended 3D
+        tear_camera_distance: '1000',
+        // Extended particles
+        tear_particle_lifetime_mult: '1.0',
+        // Visual effects extension
+        tear_bloom_threshold: '0.7',
+        tear_bloom_intensity: '1.0',
+        tear_motion_blur_samples: '6',
+        tear_motion_blur_intensity: '0.5',
+        tear_chromatic_offset: '2',
+        tear_enable_ssao: '1',
+        tear_ssao_radius: '15',
+        tear_ssao_intensity: '0.5',
+        // Animation phases
+        tear_phase_cracking_ratio: '0.3',
+        tear_phase_preparing_ratio: '0.1',
+        tear_phase_explosion_ratio: '0.05',
+        tear_phase_flying_ratio: '0.4',
+        tear_phase_fading_ratio: '0.15',
+        // Texture
+        tear_texture_filtering: 'linear',
+        tear_enable_mipmaps: '1',
+        // Fragment
+        tear_fragment_count: '50',
+        tear_fragment_thickness: '5',
+        tear_voronoi_subdivisions: '3',
+        tear_voronoi_perturbation: '15',
+        tear_enable_backface: '1',
+        // Physics
+        tear_gravity: '300',
+        tear_air_resistance: '0.02',
+        tear_rotation_damping: '0.98',
+        tear_initial_speed_mult: '1.0',
+        // Lighting
+        tear_lighting_intensity: '1.0',
+        tear_ambient_light: '0.4',
+        tear_directional_light: '0.6',
+        tear_light_dir_x: '0.5',
+        tear_light_dir_y: '-1',
+        tear_light_dir_z: '0.5',
+        tear_enable_edge_light: '1',
+        tear_edge_light_intensity: '1.0',
+        // Camera
+        tear_enable_camera_shake: '1',
+        tear_camera_shake_intensity: '8',
+        tear_camera_shake_duration: '300',
+        tear_enable_camera_tracking: '0',
+        tear_camera_tracking_smooth: '0.2',
+        // Performance
+        tear_enable_lod: '1',
+        tear_lod_distance_near: '200',
+        tear_lod_distance_far: '1200',
+        tear_enable_culling: '1'
+      },
+      quality: {
+        // Existing
+        tear_crack_layers: '3',
+        tear_crack_density: '1.5',
+        tear_crack_glow: '0.8',
+        tear_enable_shadow: '1',
+        tear_3d_depth: '400',
+        tear_3d_rotation_speed: '7',
+        tear_camera_fov: '90',
+        tear_enable_perspective: '1',
+        tear_particle_glass_count: '800',
+        tear_particle_sparkle_count: '350',
+        tear_particle_smoke_count: '80',
+        tear_enable_bloom: '1',
+        tear_enable_motion_blur: '1',
+        tear_enable_chromatic: '1',
+        tear_animation_total_duration: '5000',
+        tear_explosion_force: '1.3',
+        tear_slow_motion_factor: '0.8',
+        tear_texture_resolution: '2x',
+        tear_target_fps: '60',
+        tear_adaptive_quality: '1',
+        // Extended crack
+        tear_crack_width_min: '3',
+        tear_crack_width_max: '7',
+        tear_crack_branch_prob: '0.8',
+        // Extended 3D
+        tear_camera_distance: '1200',
+        // Extended particles
+        tear_particle_lifetime_mult: '1.5',
+        // Visual effects extension
+        tear_bloom_threshold: '0.6',
+        tear_bloom_intensity: '1.5',
+        tear_motion_blur_samples: '10',
+        tear_motion_blur_intensity: '0.7',
+        tear_chromatic_offset: '3',
+        tear_enable_ssao: '1',
+        tear_ssao_radius: '18',
+        tear_ssao_intensity: '0.7',
+        // Animation phases
+        tear_phase_cracking_ratio: '0.3',
+        tear_phase_preparing_ratio: '0.1',
+        tear_phase_explosion_ratio: '0.05',
+        tear_phase_flying_ratio: '0.4',
+        tear_phase_fading_ratio: '0.15',
+        // Texture
+        tear_texture_filtering: 'linear',
+        tear_enable_mipmaps: '1',
+        // Fragment
+        tear_fragment_count: '70',
+        tear_fragment_thickness: '7',
+        tear_voronoi_subdivisions: '4',
+        tear_voronoi_perturbation: '25',
+        tear_enable_backface: '1',
+        // Physics
+        tear_gravity: '350',
+        tear_air_resistance: '0.015',
+        tear_rotation_damping: '0.99',
+        tear_initial_speed_mult: '1.5',
+        // Lighting
+        tear_lighting_intensity: '1.3',
+        tear_ambient_light: '0.3',
+        tear_directional_light: '0.7',
+        tear_light_dir_x: '0.6',
+        tear_light_dir_y: '-1',
+        tear_light_dir_z: '0.6',
+        tear_enable_edge_light: '1',
+        tear_edge_light_intensity: '1.5',
+        // Camera
+        tear_enable_camera_shake: '1',
+        tear_camera_shake_intensity: '12',
+        tear_camera_shake_duration: '400',
+        tear_enable_camera_tracking: '1',
+        tear_camera_tracking_smooth: '0.3',
+        // Performance
+        tear_enable_lod: '0',
+        tear_lod_distance_near: '300',
+        tear_lod_distance_far: '1500',
+        tear_enable_culling: '1'
+      },
+      extreme: {
+        // Existing
+        tear_crack_layers: '3',
+        tear_crack_density: '2.0',
+        tear_crack_glow: '1.0',
+        tear_enable_shadow: '1',
+        tear_3d_depth: '500',
+        tear_3d_rotation_speed: '10',
+        tear_camera_fov: '110',
+        tear_enable_perspective: '1',
+        tear_particle_glass_count: '1000',
+        tear_particle_sparkle_count: '500',
+        tear_particle_smoke_count: '100',
+        tear_enable_bloom: '1',
+        tear_enable_motion_blur: '1',
+        tear_enable_chromatic: '1',
+        tear_animation_total_duration: '6000',
+        tear_explosion_force: '2.0',
+        tear_slow_motion_factor: '0.6',
+        tear_texture_resolution: '4x',
+        tear_target_fps: '60',
+        tear_adaptive_quality: '0',
+        // Extended crack
+        tear_crack_width_min: '4',
+        tear_crack_width_max: '10',
+        tear_crack_branch_prob: '1.0',
+        // Extended 3D
+        tear_camera_distance: '1500',
+        // Extended particles
+        tear_particle_lifetime_mult: '2.0',
+        // Visual effects extension
+        tear_bloom_threshold: '0.5',
+        tear_bloom_intensity: '2.5',
+        tear_motion_blur_samples: '16',
+        tear_motion_blur_intensity: '1.0',
+        tear_chromatic_offset: '5',
+        tear_enable_ssao: '1',
+        tear_ssao_radius: '20',
+        tear_ssao_intensity: '0.9',
+        // Animation phases
+        tear_phase_cracking_ratio: '0.3',
+        tear_phase_preparing_ratio: '0.1',
+        tear_phase_explosion_ratio: '0.05',
+        tear_phase_flying_ratio: '0.4',
+        tear_phase_fading_ratio: '0.15',
+        // Texture
+        tear_texture_filtering: 'linear',
+        tear_enable_mipmaps: '1',
+        // Fragment
+        tear_fragment_count: '100',
+        tear_fragment_thickness: '10',
+        tear_voronoi_subdivisions: '5',
+        tear_voronoi_perturbation: '50',
+        tear_enable_backface: '1',
+        // Physics
+        tear_gravity: '400',
+        tear_air_resistance: '0.01',
+        tear_rotation_damping: '0.995',
+        tear_initial_speed_mult: '2.5',
+        // Lighting
+        tear_lighting_intensity: '1.8',
+        tear_ambient_light: '0.2',
+        tear_directional_light: '0.8',
+        tear_light_dir_x: '0.7',
+        tear_light_dir_y: '-1',
+        tear_light_dir_z: '0.7',
+        tear_enable_edge_light: '1',
+        tear_edge_light_intensity: '2.0',
+        // Camera
+        tear_enable_camera_shake: '1',
+        tear_camera_shake_intensity: '20',
+        tear_camera_shake_duration: '600',
+        tear_enable_camera_tracking: '1',
+        tear_camera_tracking_smooth: '0.5',
+        // Performance
+        tear_enable_lod: '0',
+        tear_lod_distance_near: '0',
+        tear_lod_distance_far: '2000',
+        tear_enable_culling: '0'
+      }
+    };
+
+    setSettings({ ...settings, ...presets[preset] });
+    alert(`已应用 ${preset} 预设配置！`);
+  };
+
   // 保存配置
   const saveSettings = async () => {
     if (!settings) return;
@@ -194,6 +547,12 @@ export const AdminPanel: React.FC = () => {
             onClick={() => setActiveTab('settings')}
           >
             系统配置
+          </button>
+          <button
+            className={activeTab === 'webgl' ? 'active' : ''}
+            onClick={() => setActiveTab('webgl')}
+          >
+            🎬 WebGL撕裂效果
           </button>
         </div>
       </div>
@@ -914,6 +1273,1055 @@ export const AdminPanel: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'webgl' && settings && (
+          <div className="webgl-section">
+            <h2>🎬 WebGL 超真实撕裂效果配置</h2>
+            <p style={{ marginBottom: '30px', color: '#666', fontSize: '14px' }}>
+              配置窗口撕裂时的真实3D效果、裂纹生成、粒子系统等参数。修改后立即生效。
+            </p>
+
+            {/* 预设按钮 */}
+            <div className="preset-buttons" style={{ marginBottom: '30px' }}>
+              <button onClick={() => loadWebGLPreset('performance')} style={{ background: '#2ecc71' }}>
+                🚀 性能模式
+              </button>
+              <button onClick={() => loadWebGLPreset('balanced')} style={{ background: '#3498db' }}>
+                ⚖️ 平衡模式
+              </button>
+              <button onClick={() => loadWebGLPreset('quality')} style={{ background: '#9b59b6' }}>
+                💎 质量模式
+              </button>
+              <button onClick={() => loadWebGLPreset('extreme')} style={{ background: '#e74c3c' }}>
+                🔥 极致模式
+              </button>
+            </div>
+
+            {/* 展开/折叠全部 */}
+            <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+              <button onClick={() => toggleAllSections(true)} style={{ background: '#16a085', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                📂 展开全部高级设置
+              </button>
+              <button onClick={() => toggleAllSections(false)} style={{ background: '#7f8c8d', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                📁 折叠全部高级设置
+              </button>
+            </div>
+
+            <div className="settings-form">
+              {/* 裂纹效果 */}
+              <h3 style={{ marginBottom: '20px', color: '#667eea', fontSize: '18px' }}>💥 裂纹效果</h3>
+              
+              <div className="form-group">
+                <label>裂纹层数：{settings.tear_crack_layers || '2'}</label>
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="1"
+                  value={settings.tear_crack_layers || '2'}
+                  onChange={(e) => updateSettingField('tear_crack_layers', e.target.value)}
+                />
+                <span className="hint">更多层数 = 更复杂的裂纹网络 (1-3)</span>
+              </div>
+
+              <div className="form-group">
+                <label>裂纹密度：{settings.tear_crack_density || '1.0'}</label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={settings.tear_crack_density || '1.0'}
+                  onChange={(e) => updateSettingField('tear_crack_density', e.target.value)}
+                />
+                <span className="hint">裂纹生成的密集程度 (0.5-2.0)</span>
+              </div>
+
+              <div className="form-group">
+                <label>裂纹发光强度：{settings.tear_crack_glow || '0.6'}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={settings.tear_crack_glow || '0.6'}
+                  onChange={(e) => updateSettingField('tear_crack_glow', e.target.value)}
+                />
+                <span className="hint">裂纹边缘的发光效果 (0-1)</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_shadow === '1'}
+                    onChange={(e) => updateSettingField('tear_enable_shadow', e.target.checked ? '1' : '0')}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用裂纹阴影
+                </label>
+                <span className="hint">在裂纹内部添加深度阴影效果</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+
+              {/* 3D效果 */}
+              <h3 style={{ marginBottom: '20px', color: '#667eea', fontSize: '18px' }}>🎭 3D效果</h3>
+              
+              <div className="form-group">
+                <label>3D深度：{settings.tear_3d_depth || '300'}px</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="500"
+                  step="10"
+                  value={settings.tear_3d_depth || '300'}
+                  onChange={(e) => updateSettingField('tear_3d_depth', e.target.value)}
+                />
+                <span className="hint">碎片向屏幕外飞出的距离 (0-500px)</span>
+              </div>
+
+              <div className="form-group">
+                <label>旋转速度：{settings.tear_3d_rotation_speed || '5'}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  value={settings.tear_3d_rotation_speed || '5'}
+                  onChange={(e) => updateSettingField('tear_3d_rotation_speed', e.target.value)}
+                />
+                <span className="hint">碎片3D旋转的速度 (0-10)</span>
+              </div>
+
+              <div className="form-group">
+                <label>相机视角：{settings.tear_camera_fov || '75'}度</label>
+                <input
+                  type="range"
+                  min="30"
+                  max="120"
+                  step="5"
+                  value={settings.tear_camera_fov || '75'}
+                  onChange={(e) => updateSettingField('tear_camera_fov', e.target.value)}
+                />
+                <span className="hint">FOV值越大，透视效果越强 (30-120)</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_perspective !== '0'}
+                    onChange={(e) => updateSettingField('tear_enable_perspective', e.target.checked ? '1' : '0')}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用透视投影
+                </label>
+                <span className="hint">近大远小的真实3D效果</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+
+              {/* 粒子系统 */}
+              <h3 style={{ marginBottom: '20px', color: '#667eea', fontSize: '18px' }}>✨ 粒子系统</h3>
+              
+              <div className="form-group">
+                <label>玻璃粒子数量：{settings.tear_particle_glass_count || '500'}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  step="50"
+                  value={settings.tear_particle_glass_count || '500'}
+                  onChange={(e) => updateSettingField('tear_particle_glass_count', e.target.value)}
+                />
+                <span className="hint">飞散的玻璃碎屑数量 (0-1000)</span>
+              </div>
+
+              <div className="form-group">
+                <label>光点粒子数量：{settings.tear_particle_sparkle_count || '200'}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="500"
+                  step="25"
+                  value={settings.tear_particle_sparkle_count || '200'}
+                  onChange={(e) => updateSettingField('tear_particle_sparkle_count', e.target.value)}
+                />
+                <span className="hint">反光效果粒子数量 (0-500)</span>
+              </div>
+
+              <div className="form-group">
+                <label>烟雾粒子数量：{settings.tear_particle_smoke_count || '50'}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="10"
+                  value={settings.tear_particle_smoke_count || '50'}
+                  onChange={(e) => updateSettingField('tear_particle_smoke_count', e.target.value)}
+                />
+                <span className="hint">撕裂瞬间的烟尘效果 (0-100)</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+
+              {/* 视觉特效 */}
+              <h3 style={{ marginBottom: '20px', color: '#667eea', fontSize: '18px' }}>🌟 视觉特效</h3>
+              
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_bloom === '1'}
+                    onChange={(e) => updateSettingField('tear_enable_bloom', e.target.checked ? '1' : '0')}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用辉光效果（Bloom）
+                </label>
+                <span className="hint">裂纹边缘发光效果</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_motion_blur === '1'}
+                    onChange={(e) => updateSettingField('tear_enable_motion_blur', e.target.checked ? '1' : '0')}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用运动模糊
+                </label>
+                <span className="hint">高速运动时的模糊效果</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_enable_chromatic === '1'}
+                    onChange={(e) => updateSettingField('tear_enable_chromatic', e.target.checked ? '1' : '0')}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用色差效果
+                </label>
+                <span className="hint">碎片边缘RGB分离，增强速度感</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+
+              {/* 动画时间配置 */}
+              <h3 style={{ marginBottom: '20px', color: '#667eea', fontSize: '18px' }}>⏱️ 动画时间</h3>
+              
+              <div className="form-group">
+                <label>总时长：{settings.tear_animation_total_duration || '4000'}ms</label>
+                <input
+                  type="range"
+                  min="2000"
+                  max="8000"
+                  step="500"
+                  value={settings.tear_animation_total_duration || '4000'}
+                  onChange={(e) => updateSettingField('tear_animation_total_duration', e.target.value)}
+                />
+                <span className="hint">整个撕裂动画的总时长 (2000-8000ms)</span>
+              </div>
+
+              <div className="form-group">
+                <label>爆炸力度：{settings.tear_explosion_force || '1.0'}</label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={settings.tear_explosion_force || '1.0'}
+                  onChange={(e) => updateSettingField('tear_explosion_force', e.target.value)}
+                />
+                <span className="hint">撕裂瞬间碎片飞出的力度 (0.5-2.0)</span>
+              </div>
+
+              <div className="form-group">
+                <label>慢动作倍率：{settings.tear_slow_motion_factor || '1.0'}</label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.0"
+                  step="0.1"
+                  value={settings.tear_slow_motion_factor || '1.0'}
+                  onChange={(e) => updateSettingField('tear_slow_motion_factor', e.target.value)}
+                />
+                <span className="hint">1.0=正常速度，0.5=慢放2倍 (0.5-1.0)</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+
+              {/* 性能配置 */}
+              <h3 style={{ marginBottom: '20px', color: '#667eea', fontSize: '18px' }}>⚡ 性能配置</h3>
+              
+              <div className="form-group">
+                <label>纹理分辨率：</label>
+                <select
+                  value={settings.tear_texture_resolution || '2x'}
+                  onChange={(e) => updateSettingField('tear_texture_resolution', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="1x">1x - 标准分辨率（最快）</option>
+                  <option value="2x">2x - 高清（推荐）</option>
+                  <option value="4x">4x - 超高清（最清晰）</option>
+                </select>
+                <span className="hint">窗口内容纹理的分辨率倍数</span>
+              </div>
+
+              <div className="form-group">
+                <label>目标帧率：</label>
+                <select
+                  value={settings.tear_target_fps || '60'}
+                  onChange={(e) => updateSettingField('tear_target_fps', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="30">30 FPS - 省电模式</option>
+                  <option value="60">60 FPS - 标准流畅</option>
+                  <option value="120">120 FPS - 极致流畅</option>
+                </select>
+                <span className="hint">动画目标帧率</span>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.tear_adaptive_quality === '1'}
+                    onChange={(e) => updateSettingField('tear_adaptive_quality', e.target.checked ? '1' : '0')}
+                    style={{ marginRight: '10px' }}
+                  />
+                  启用自适应质量
+                </label>
+                <span className="hint">根据设备性能自动调整效果</span>
+              </div>
+
+              <hr style={{ margin: '40px 0', border: 'none', borderTop: '3px solid #667eea' }} />
+
+              {/* ===== EXTENDED / NEW SETTINGS (Collapsible) ===== */}
+
+              {/* 裂纹效果扩展 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('crack_ext')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.crack_ext ? '▼' : '▶'} 💥 裂纹效果 (扩展)
+                </h3>
+                {expandedSections.crack_ext && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>裂纹最小宽度：{settings.tear_crack_width_min || '2'}px</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="1"
+                        value={settings.tear_crack_width_min || '2'}
+                        onChange={(e) => updateSettingField('tear_crack_width_min', e.target.value)}
+                      />
+                      <span className="hint">裂纹线条的最小宽度 (1-5px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>裂纹最大宽度：{settings.tear_crack_width_max || '5'}px</label>
+                      <input
+                        type="range"
+                        min="2"
+                        max="10"
+                        step="1"
+                        value={settings.tear_crack_width_max || '5'}
+                        onChange={(e) => updateSettingField('tear_crack_width_max', e.target.value)}
+                      />
+                      <span className="hint">裂纹线条的最大宽度 (2-10px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>裂纹分支概率：{settings.tear_crack_branch_prob || '0.7'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_crack_branch_prob || '0.7'}
+                        onChange={(e) => updateSettingField('tear_crack_branch_prob', e.target.value)}
+                      />
+                      <span className="hint">裂纹产生分支的概率 (0-1)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3D效果扩展 */}
+              <div className="form-group">
+                <label>相机距离：{settings.tear_camera_distance || '1000'}px</label>
+                <input
+                  type="range"
+                  min="500"
+                  max="2000"
+                  step="100"
+                  value={settings.tear_camera_distance || '1000'}
+                  onChange={(e) => updateSettingField('tear_camera_distance', e.target.value)}
+                />
+                <span className="hint">相机与场景的距离，影响透视强度 (500-2000px)</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+
+              {/* 粒子系统扩展 */}
+              <div className="form-group">
+                <label>粒子生命周期倍数：{settings.tear_particle_lifetime_mult || '1.0'}</label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="3"
+                  step="0.1"
+                  value={settings.tear_particle_lifetime_mult || '1.0'}
+                  onChange={(e) => updateSettingField('tear_particle_lifetime_mult', e.target.value)}
+                />
+                <span className="hint">粒子存在时间的倍数 (0.5-3)</span>
+              </div>
+
+              <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px solid #e0e0e0' }} />
+
+              {/* 视觉特效扩展 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('visual_ext')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.visual_ext ? '▼' : '▶'} 🌟 视觉特效 (扩展)
+                </h3>
+                {expandedSections.visual_ext && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>辉光阈值：{settings.tear_bloom_threshold || '0.7'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_bloom_threshold || '0.7'}
+                        onChange={(e) => updateSettingField('tear_bloom_threshold', e.target.value)}
+                      />
+                      <span className="hint">亮度超过此值才产生辉光 (0-1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>辉光强度：{settings.tear_bloom_intensity || '1.0'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="3"
+                        step="0.1"
+                        value={settings.tear_bloom_intensity || '1.0'}
+                        onChange={(e) => updateSettingField('tear_bloom_intensity', e.target.value)}
+                      />
+                      <span className="hint">辉光的强度倍数 (0-3)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>运动模糊采样数：{settings.tear_motion_blur_samples || '6'}</label>
+                      <input
+                        type="range"
+                        min="2"
+                        max="16"
+                        step="1"
+                        value={settings.tear_motion_blur_samples || '6'}
+                        onChange={(e) => updateSettingField('tear_motion_blur_samples', e.target.value)}
+                      />
+                      <span className="hint">运动模糊的采样数，越高越平滑 (2-16)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>运动模糊强度：{settings.tear_motion_blur_intensity || '0.5'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_motion_blur_intensity || '0.5'}
+                        onChange={(e) => updateSettingField('tear_motion_blur_intensity', e.target.value)}
+                      />
+                      <span className="hint">运动模糊的强度 (0-1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>色差偏移量：{settings.tear_chromatic_offset || '2'}px</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.5"
+                        value={settings.tear_chromatic_offset || '2'}
+                        onChange={(e) => updateSettingField('tear_chromatic_offset', e.target.value)}
+                      />
+                      <span className="hint">RGB分离的偏移距离 (0-5px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_ssao === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_ssao', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用环境光遮蔽 (SSAO)
+                      </label>
+                      <span className="hint">模拟环境光被遮挡的效果</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>SSAO半径：{settings.tear_ssao_radius || '15'}px</label>
+                      <input
+                        type="range"
+                        min="5"
+                        max="20"
+                        step="1"
+                        value={settings.tear_ssao_radius || '15'}
+                        onChange={(e) => updateSettingField('tear_ssao_radius', e.target.value)}
+                      />
+                      <span className="hint">环境光遮蔽的采样半径 (5-20px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>SSAO强度：{settings.tear_ssao_intensity || '0.5'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_ssao_intensity || '0.5'}
+                        onChange={(e) => updateSettingField('tear_ssao_intensity', e.target.value)}
+                      />
+                      <span className="hint">环境光遮蔽的强度 (0-1)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 动画配置扩展 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('animation_ext')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.animation_ext ? '▼' : '▶'} ⏱️ 动画阶段配置 (扩展)
+                </h3>
+                {expandedSections.animation_ext && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>裂纹生成阶段占比：{settings.tear_phase_cracking_ratio || '0.3'}</label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="0.5"
+                        step="0.05"
+                        value={settings.tear_phase_cracking_ratio || '0.3'}
+                        onChange={(e) => updateSettingField('tear_phase_cracking_ratio', e.target.value)}
+                      />
+                      <span className="hint">裂纹生成阶段占总时长的比例 (0.1-0.5)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>准备阶段占比：{settings.tear_phase_preparing_ratio || '0.1'}</label>
+                      <input
+                        type="range"
+                        min="0.05"
+                        max="0.2"
+                        step="0.05"
+                        value={settings.tear_phase_preparing_ratio || '0.1'}
+                        onChange={(e) => updateSettingField('tear_phase_preparing_ratio', e.target.value)}
+                      />
+                      <span className="hint">撕裂准备阶段占总时长的比例 (0.05-0.2)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>爆炸瞬间占比：{settings.tear_phase_explosion_ratio || '0.05'}</label>
+                      <input
+                        type="range"
+                        min="0.02"
+                        max="0.1"
+                        step="0.01"
+                        value={settings.tear_phase_explosion_ratio || '0.05'}
+                        onChange={(e) => updateSettingField('tear_phase_explosion_ratio', e.target.value)}
+                      />
+                      <span className="hint">爆炸瞬间占总时长的比例 (0.02-0.1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>碎片飞散阶段占比：{settings.tear_phase_flying_ratio || '0.4'}</label>
+                      <input
+                        type="range"
+                        min="0.3"
+                        max="0.6"
+                        step="0.05"
+                        value={settings.tear_phase_flying_ratio || '0.4'}
+                        onChange={(e) => updateSettingField('tear_phase_flying_ratio', e.target.value)}
+                      />
+                      <span className="hint">碎片飞散阶段占总时长的比例 (0.3-0.6)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>消散阶段占比：{settings.tear_phase_fading_ratio || '0.15'}</label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="0.3"
+                        step="0.05"
+                        value={settings.tear_phase_fading_ratio || '0.15'}
+                        onChange={(e) => updateSettingField('tear_phase_fading_ratio', e.target.value)}
+                      />
+                      <span className="hint">消散阶段占总时长的比例 (0.1-0.3)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 纹理配置 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('texture')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.texture ? '▼' : '▶'} 🖼️ 纹理配置
+                </h3>
+                {expandedSections.texture && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>纹理过滤方式：</label>
+                      <select
+                        value={settings.tear_texture_filtering || 'linear'}
+                        onChange={(e) => updateSettingField('tear_texture_filtering', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: '2px solid #e0e0e0',
+                          borderRadius: '6px',
+                          fontSize: '14px'
+                        }}
+                      >
+                        <option value="nearest">Nearest - 最近邻（像素风）</option>
+                        <option value="linear">Linear - 线性（平滑）</option>
+                      </select>
+                      <span className="hint">纹理采样时的过滤方式</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_mipmaps === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_mipmaps', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用Mipmaps
+                      </label>
+                      <span className="hint">预生成多级纹理，提升远距离渲染质量</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 碎片配置 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('fragment')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.fragment ? '▼' : '▶'} 🧩 碎片配置
+                </h3>
+                {expandedSections.fragment && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>碎片数量：{settings.tear_fragment_count || '50'}</label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="5"
+                        value={settings.tear_fragment_count || '50'}
+                        onChange={(e) => updateSettingField('tear_fragment_count', e.target.value)}
+                      />
+                      <span className="hint">窗口撕裂后的碎片数量 (10-100)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>碎片厚度：{settings.tear_fragment_thickness || '5'}px</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        step="1"
+                        value={settings.tear_fragment_thickness || '5'}
+                        onChange={(e) => updateSettingField('tear_fragment_thickness', e.target.value)}
+                      />
+                      <span className="hint">碎片的3D厚度 (1-10px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Voronoi细分级别：{settings.tear_voronoi_subdivisions || '3'}</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="1"
+                        value={settings.tear_voronoi_subdivisions || '3'}
+                        onChange={(e) => updateSettingField('tear_voronoi_subdivisions', e.target.value)}
+                      />
+                      <span className="hint">Voronoi图的细分级别，越高越碎 (1-5)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Voronoi扰动强度：{settings.tear_voronoi_perturbation || '15'}px</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        step="5"
+                        value={settings.tear_voronoi_perturbation || '15'}
+                        onChange={(e) => updateSettingField('tear_voronoi_perturbation', e.target.value)}
+                      />
+                      <span className="hint">碎片边缘的随机扰动强度 (0-50px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_backface === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_backface', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用背面渲染
+                      </label>
+                      <span className="hint">渲染碎片的背面，增加真实感</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 物理配置 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('physics')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.physics ? '▼' : '▶'} ⚛️ 物理配置
+                </h3>
+                {expandedSections.physics && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>重力加速度：{settings.tear_gravity || '300'}px/s²</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1000"
+                        step="50"
+                        value={settings.tear_gravity || '300'}
+                        onChange={(e) => updateSettingField('tear_gravity', e.target.value)}
+                      />
+                      <span className="hint">碎片下落的重力强度 (0-1000px/s²)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>空气阻力：{settings.tear_air_resistance || '0.02'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="0.1"
+                        step="0.01"
+                        value={settings.tear_air_resistance || '0.02'}
+                        onChange={(e) => updateSettingField('tear_air_resistance', e.target.value)}
+                      />
+                      <span className="hint">空气对碎片的阻力系数 (0-0.1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>旋转阻尼：{settings.tear_rotation_damping || '0.98'}</label>
+                      <input
+                        type="range"
+                        min="0.9"
+                        max="1.0"
+                        step="0.01"
+                        value={settings.tear_rotation_damping || '0.98'}
+                        onChange={(e) => updateSettingField('tear_rotation_damping', e.target.value)}
+                      />
+                      <span className="hint">旋转速度的衰减系数，越接近1越持久 (0.9-1.0)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>初始速度倍数：{settings.tear_initial_speed_mult || '1.0'}</label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="3.0"
+                        step="0.1"
+                        value={settings.tear_initial_speed_mult || '1.0'}
+                        onChange={(e) => updateSettingField('tear_initial_speed_mult', e.target.value)}
+                      />
+                      <span className="hint">碎片初始飞出速度的倍数 (0.5-3.0)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 光照配置 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('lighting')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.lighting ? '▼' : '▶'} 💡 光照配置
+                </h3>
+                {expandedSections.lighting && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>光照强度：{settings.tear_lighting_intensity || '1.0'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={settings.tear_lighting_intensity || '1.0'}
+                        onChange={(e) => updateSettingField('tear_lighting_intensity', e.target.value)}
+                      />
+                      <span className="hint">整体光照的强度倍数 (0-2)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>环境光强度：{settings.tear_ambient_light || '0.4'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_ambient_light || '0.4'}
+                        onChange={(e) => updateSettingField('tear_ambient_light', e.target.value)}
+                      />
+                      <span className="hint">无方向性的基础环境光 (0-1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>方向光强度：{settings.tear_directional_light || '0.6'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_directional_light || '0.6'}
+                        onChange={(e) => updateSettingField('tear_directional_light', e.target.value)}
+                      />
+                      <span className="hint">有方向性的主光源强度 (0-1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>光源方向X：{settings.tear_light_dir_x || '0.5'}</label>
+                      <input
+                        type="range"
+                        min="-1"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_light_dir_x || '0.5'}
+                        onChange={(e) => updateSettingField('tear_light_dir_x', e.target.value)}
+                      />
+                      <span className="hint">光源在X轴的方向分量 (-1 到 1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>光源方向Y：{settings.tear_light_dir_y || '-1'}</label>
+                      <input
+                        type="range"
+                        min="-1"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_light_dir_y || '-1'}
+                        onChange={(e) => updateSettingField('tear_light_dir_y', e.target.value)}
+                      />
+                      <span className="hint">光源在Y轴的方向分量 (-1 到 1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>光源方向Z：{settings.tear_light_dir_z || '0.5'}</label>
+                      <input
+                        type="range"
+                        min="-1"
+                        max="1"
+                        step="0.1"
+                        value={settings.tear_light_dir_z || '0.5'}
+                        onChange={(e) => updateSettingField('tear_light_dir_z', e.target.value)}
+                      />
+                      <span className="hint">光源在Z轴的方向分量 (-1 到 1)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_edge_light === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_edge_light', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用边缘光（Rim Light）
+                      </label>
+                      <span className="hint">碎片边缘的轮廓光效果</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>边缘光强度：{settings.tear_edge_light_intensity || '1.0'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={settings.tear_edge_light_intensity || '1.0'}
+                        onChange={(e) => updateSettingField('tear_edge_light_intensity', e.target.value)}
+                      />
+                      <span className="hint">边缘光的强度 (0-2)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 相机效果 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('camera')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.camera ? '▼' : '▶'} 📹 相机效果
+                </h3>
+                {expandedSections.camera && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_camera_shake === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_camera_shake', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用相机震动
+                      </label>
+                      <span className="hint">爆炸瞬间的相机震动效果</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>相机震动强度：{settings.tear_camera_shake_intensity || '8'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="20"
+                        step="1"
+                        value={settings.tear_camera_shake_intensity || '8'}
+                        onChange={(e) => updateSettingField('tear_camera_shake_intensity', e.target.value)}
+                      />
+                      <span className="hint">相机震动的强度 (0-20)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>相机震动时长：{settings.tear_camera_shake_duration || '300'}ms</label>
+                      <input
+                        type="range"
+                        min="100"
+                        max="1000"
+                        step="50"
+                        value={settings.tear_camera_shake_duration || '300'}
+                        onChange={(e) => updateSettingField('tear_camera_shake_duration', e.target.value)}
+                      />
+                      <span className="hint">相机震动持续时间 (100-1000ms)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_camera_tracking === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_camera_tracking', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用相机跟踪
+                      </label>
+                      <span className="hint">相机跟随碎片移动</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>相机跟踪平滑度：{settings.tear_camera_tracking_smooth || '0.2'}</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="0.5"
+                        step="0.05"
+                        value={settings.tear_camera_tracking_smooth || '0.2'}
+                        onChange={(e) => updateSettingField('tear_camera_tracking_smooth', e.target.value)}
+                      />
+                      <span className="hint">相机跟踪的平滑程度，越大越快 (0-0.5)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 性能配置扩展 */}
+              <div className="collapsible-section" style={{ marginBottom: '20px' }}>
+                <h3 onClick={() => toggleSection('performance_ext')} style={{ marginBottom: '15px', color: '#667eea', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {expandedSections.performance_ext ? '▼' : '▶'} ⚡ 性能配置 (扩展)
+                </h3>
+                {expandedSections.performance_ext && (
+                  <div style={{ paddingLeft: '20px', borderLeft: '3px solid #667eea' }}>
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_lod === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_lod', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用LOD（细节层次）
+                      </label>
+                      <span className="hint">根据距离自动调整渲染细节</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>LOD近距离：{settings.tear_lod_distance_near || '200'}px</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="500"
+                        step="50"
+                        value={settings.tear_lod_distance_near || '200'}
+                        onChange={(e) => updateSettingField('tear_lod_distance_near', e.target.value)}
+                      />
+                      <span className="hint">近距离全细节渲染的范围 (0-500px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>LOD远距离：{settings.tear_lod_distance_far || '1200'}px</label>
+                      <input
+                        type="range"
+                        min="500"
+                        max="2000"
+                        step="100"
+                        value={settings.tear_lod_distance_far || '1200'}
+                        onChange={(e) => updateSettingField('tear_lod_distance_far', e.target.value)}
+                      />
+                      <span className="hint">远距离低细节渲染的范围 (500-2000px)</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.tear_enable_culling === '1'}
+                          onChange={(e) => updateSettingField('tear_enable_culling', e.target.checked ? '1' : '0')}
+                          style={{ marginRight: '10px' }}
+                        />
+                        启用视锥剔除
+                      </label>
+                      <span className="hint">不渲染视野外的碎片以提升性能</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <hr style={{ margin: '40px 0', border: 'none', borderTop: '3px solid #667eea' }} />
+
+              <button onClick={saveSettings} disabled={loading} className="save-btn" style={{ marginTop: '30px' }}>
+                保存WebGL配置
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -1116,6 +2524,52 @@ export const AdminPanel: React.FC = () => {
 
         .edit-form input[type="text"] {
           flex: 1;
+        }
+
+        .preset-buttons {
+          display: flex;
+          gap: 15px;
+          flex-wrap: wrap;
+        }
+
+        .preset-buttons button {
+          flex: 1;
+          min-width: 150px;
+          padding: 12px 20px;
+          font-size: 15px;
+          font-weight: 600;
+        }
+
+        input[type="range"] {
+          width: 100%;
+          height: 6px;
+          border-radius: 3px;
+          background: #e0e0e0;
+          outline: none;
+          opacity: 0.7;
+          transition: opacity 0.2s;
+        }
+
+        input[type="range"]:hover {
+          opacity: 1;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #667eea;
+          cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #667eea;
+          cursor: pointer;
+          border: none;
         }
       `}</style>
     </div>

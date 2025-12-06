@@ -112,8 +112,34 @@ INSERT INTO settings (`key`, `value`, description) VALUES
 ('wall_lock_duration', '4500', '墙壁动画锁定时长（毫秒，自动计算）'),
 ('wall_capture_confirm_timeout', '2000', '墙壁捕获确认超时时间（毫秒）'),
 ('wall_lock_auto_cleanup_interval', '1000', '墙壁锁自动清理间隔（毫秒）'),
+('captured_window_cleanup_timeout', '10000', '捕获窗口清理超时时间（毫秒）'),
 ('enable_performance_monitor', '1', '是否启用性能监控 (0=关闭, 1=开启)'),
-('performance_log_threshold', '50', '性能日志阈值（毫秒，超过则记录警告）')
+('performance_log_threshold', '50', '性能日志阈值（毫秒，超过则记录警告）'),
+-- ✅ 拖动事件节流配置
+('broadcast_throttle_enabled', '1', '是否启用拖动事件节流 (0=禁用, 1=启用)'),
+('broadcast_throttle_interval', '16', '拖动事件节流间隔（毫秒，默认16ms=60fps）'),
+-- ✅ 双根渲染架构配置
+('enable_dual_root', '0', '启用双React根渲染 (0=单根模式, 1=双根模式)'),
+('drag_throttle_enabled', '0', '客户端拖动事件节流 (0=禁用, 1=启用)'),
+('drag_throttle_interval', '33', '客户端拖动节流间隔（毫秒，33ms≈30fps）'),
+('enable_concurrent_mode', '1', 'React 18并发模式优化 (0=禁用, 1=启用)'),
+('enable_animation_worker', '0', 'Web Worker动画计算 (0=禁用, 1=启用，实验性)'),
+
+-- Phase 2: WebGL渲染优化
+('enable_webgl_rendering', '1', '启用WebGL渲染引擎 (0=Canvas, 1=WebGL优先)'),
+('webgl_antialiasing', '1', 'WebGL抗锯齿 (0=禁用, 1=启用)'),
+('webgl_max_particles', '500', 'WebGL最大粒子数量'),
+
+-- Phase 2: 网络批处理
+('websocket_batch_enabled', '1', '启用WebSocket批处理 (0=禁用, 1=启用)'),
+('websocket_batch_interval', '33', '批处理间隔（毫秒，33ms≈30fps）'),
+('websocket_compression', '1', '启用增量压缩 (0=禁用, 1=启用)'),
+
+-- Phase 2: 同步增强
+('enable_reliable_events', '0', '启用消息确认-重传 (0=禁用, 1=启用)'),
+('sync_validation_interval', '5000', '状态验证间隔(ms)'),
+('frame_sync_enabled', '1', '启用帧同步 (0=禁用, 1=启用)'),
+('frame_sync_throttle', '2', '帧同步节流（每N帧）')
 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
 
 -- 创建索引优化查询

@@ -29,6 +29,10 @@ export class WindowManager {
     // 💡 待确认的捕获事件 (captureId -> {windowData, timestamp, timeoutId})
     this.pendingCaptures = new Map();
     
+    // ✅ 异步碰撞处理队列（避免阻塞物理循环）
+    this.collisionQueue = [];
+    this.isProcessingCollisions = false;
+    
     // ✅ 全局捕获防护集合（防止重复捕获）
     this.capturedWindowsSet = new Set();
     
@@ -332,7 +336,14 @@ export class WindowManager {
         this.io.emit('physics_update', updates);
       }
 
-      // 处理墙壁碰撞（如果墙壁系统启用）
+      // ✅ 将碰撞添加到队列，异步处理（避免阻塞物理循环）
+      if (this.wallManager && this.config.enable_wall_system === '1' && collisions.length > 0) {
+        this.collisionQueue.push(...collisions);
+        this.scheduleCollisionProcessing();
+      }
+
+      // 旧的同步处理代码保留但不执行（注释掉）
+      /*
       if (this.wallManager && this.config.enable_wall_system === '1' && collisions.length > 0) {
         for (const collision of collisions) {
           // ✅ 步骤0.1: 检查窗口是否已被捕获（全局防护）
@@ -487,6 +498,7 @@ export class WindowManager {
           }
         }
       }
+      */
 
       // 处理撕裂的窗口
       for (const windowId of tornWindows) {
@@ -582,9 +594,11 @@ export class WindowManager {
       // 更新统计
       this.captureStats.confirmed++;
       
-      console.log(`✅ [捕获已确认] ${captureId}`);
-      console.log(`   ⏱️ 确认耗时: ${Date.now() - captureData.timestamp}ms`);
-      console.log(`   🔓 窗口 ${windowId.slice(0, 8)} 已解除捕获锁定（正常完成）`);
+      if (this.config.enable_debug_logs === '1') {
+        console.log(`✅ [捕获已确认] ${captureId}`);
+        console.log(`   ⏱️ 确认耗时: ${Date.now() - captureData.timestamp}ms`);
+        console.log(`   🔓 窗口 ${windowId.slice(0, 8)} 已解除捕获锁定（正常完成）`);
+      }
     } else {
       console.warn(`⚠️ [捕获确认失败] 未找到捕获ID: ${captureId}`);
     }
@@ -614,8 +628,10 @@ export class WindowManager {
         this.capturedWindowsSet.delete(windowId);
         
         this.pendingCaptures.delete(captureId);
-        console.log(`🗑️ [清理捕获] 用户断开，清理待确认捕获: ${captureId}`);
-        console.log(`   🔓 窗口 ${windowId.slice(0, 8)} 已解除捕获锁定（用户断开）`);
+        if (this.config.enable_debug_logs === '1') {
+          console.log(`🗑️ [清理捕获] 用户断开，清理待确认捕获: ${captureId}`);
+          console.log(`   🔓 窗口 ${windowId.slice(0, 8)} 已解除捕获锁定（用户断开）`);
+        }
       }
     }
   }
@@ -637,6 +653,201 @@ export class WindowManager {
   }
 
   /**
+   * ✅ 调度异步碰撞处理（使用 setImmediate 避免阻塞）
+   */
+  scheduleCollisionProcessing() {
+    if (this.isProcessingCollisions) return; // 已有处理任务在进行
+    
+    this.isProcessingCollisions = true;
+    setImmediate(() => {
+      this.processCollisionQueue();
+    });
+  }
+
+  /**
+   * ✅ 异步处理碰撞队列
+   */
+  async processCollisionQueue() {
+    if (this.collisionQueue.length === 0) {
+      this.isProcessingCollisions = false;
+      return;
+    }
+    
+    // 取出当前队列中的所有碰撞
+    const collisionsToProcess = [...this.collisionQueue];
+    this.collisionQueue = [];
+    
+    if (this.config.enable_debug_logs === '1') {
+      console.log(`⚡ [异步碰撞处理] 开始处理 ${collisionsToProcess.length} 个碰撞事件`);
+    }
+    
+    for (const collision of collisionsToProcess) {
+      // ✅ 步骤0.1: 检查窗口是否已被捕获（全局防护）
+      if (this.capturedWindowsSet.has(collision.windowId)) {
+        if (this.config.enable_debug_logs === '1') {
+          console.log(`⚠️ [重复捕获拒绝] 窗口 ${collision.windowId.slice(0, 8)} 已在捕获流程中，拒绝重复捕获`);
+        }
+        this.captureStats.rejected++;
+        continue; // 跳过，防止重复捕获
+      }
+      
+      // ✅ 步骤0.2: 检查墙壁动画锁（优先级最高）
+      const lock = this.wallAnimationLocks[collision.edge];
+      if (lock) {
+        const elapsed = Date.now() - lock.startTime;
+        if (elapsed < lock.duration) {
+          // 锁仍然有效，拒绝捕获
+          if (this.config.enable_debug_logs === '1') {
+            console.log(`🔒 [墙壁锁定] ${collision.edge} 正在播放动画，拒绝捕获 (剩余: ${Math.ceil((lock.duration - elapsed) / 1000)}秒)`);
+          }
+          this.captureStats.rejected++;
+          continue; // 跳过这个碰撞，窗口正常反弹
+        } else {
+          // 锁已过期，清除
+          this.wallAnimationLocks[collision.edge] = null;
+          if (this.config.enable_debug_logs === '1') {
+            console.log(`🔓 [锁已过期] ${collision.edge} 动画锁已自动清除`);
+          }
+        }
+      }
+      
+      // ✅ 步骤0.3: 检查该墙壁是否已在本帧被捕获
+      if (this.wallCapturedThisFrame[collision.edge]) {
+        if (this.config.enable_debug_logs === '1') {
+          console.log(`⚠️ [本帧已捕获] ${collision.edge} 墙本帧已捕获其他窗口`);
+        }
+        this.captureStats.rejected++;
+        continue; // 跳过，让窗口正常反弹
+      }
+      
+      // 检查是否有墙壁主人
+      const wallOwner = this.wallManager.getWallByEdge(collision.edge);
+      if (wallOwner) {
+        // ✅ 步骤1: 验证墙壁主人是否真实在线
+        if (!this.onlineUsers.has(wallOwner.userId)) {
+          console.warn(`⚠️ [墙壁验证失败] 墙壁主人 ${wallOwner.userId.slice(0, 8)} 已离线，释放 ${collision.edge} 墙`);
+          this.wallManager.releaseWall(wallOwner.userId);
+          // 广播墙壁状态更新
+          this.io.emit('wall_state_updated', this.wallManager.getAllWalls());
+          continue; // 窗口正常反弹
+        }
+        
+        // ✅ 步骤2: 验证 Socket 连接是否正常
+        const socket = this.io.sockets.sockets.get(wallOwner.socketId);
+        if (!socket || !socket.connected) {
+          console.warn(`⚠️ [墙壁验证失败] Socket ${wallOwner.socketId.slice(0, 8)} 已断开，释放 ${collision.edge} 墙`);
+          this.wallManager.releaseWall(wallOwner.userId);
+          // 广播墙壁状态更新
+          this.io.emit('wall_state_updated', this.wallManager.getAllWalls());
+          continue; // 窗口正常反弹
+        }
+        
+        // 获取完整的窗口数据
+        const window = this.physicsEngine.windows.get(collision.windowId);
+        if (window) {
+          // ✅ 立即添加到全局防护集合（最高优先级）
+          this.capturedWindowsSet.add(collision.windowId);
+          
+          // 标记该墙壁本帧已捕获
+          this.wallCapturedThisFrame[collision.edge] = true;
+          
+          // ✅ 步骤3: 生成唯一捕获ID
+          const captureId = `${collision.windowId}_${Date.now()}`;
+          
+          // ✅ 步骤4: 保存窗口数据以备回滚
+          const windowData = {
+            id: window.id,
+            message: window.message,
+            position: collision.position, // 使用碰撞前的真实位置
+            size: window.size,
+            colors: window.colors,
+            fontSize: window.fontSize,
+            floatAnimation: window.floatAnimation,
+            timestamp: Date.now(),
+            tearBaseDuration: window.tearBaseDuration,
+            shakeIntensityMultiplier: window.shakeIntensityMultiplier
+          };
+          
+          // 移除窗口（先从物理引擎移除）
+          this.physicsEngine.removeWindow(collision.windowId);
+          
+          // 更新统计
+          this.captureStats.success++;
+          
+          // ✅ 步骤5: 发送捕获事件并设置超时回滚
+          if (this.config.enable_debug_logs === '1') {
+            console.log(`🎯 [墙壁捕获] 窗口 ${collision.windowId.slice(0, 8)} 被 ${collision.edge} 墙捕获 (主人: ${wallOwner.userId.slice(0, 8)})`);
+            console.log(`   📌 捕获ID: ${captureId}`);
+            console.log(`   📌 碰撞位置: (${collision.position.x.toFixed(1)}%, ${collision.position.y.toFixed(1)}%)`);
+          }
+          
+          // 通知墙壁主人（窗口被捕获）
+          socket.emit('window_captured', {
+            captureId,
+            windowId: collision.windowId,
+            window: windowData,
+            edge: collision.edge
+          });
+          
+          // 通知其他人（窗口消失）
+          this.io.except(wallOwner.socketId).emit('window_removed', {
+            windowId: collision.windowId
+          });
+          
+          // ✅ 步骤6: 设置超时，未确认则回滚（超时时间可配置）
+          const confirmTimeout = parseInt(this.config.wall_capture_confirm_timeout || '2000');
+          const timeoutId = setTimeout(() => {
+            if (this.pendingCaptures.has(captureId)) {
+              console.warn(`⚠️ [捕获超时] 捕获 ${captureId} 未在${confirmTimeout}ms内确认，回滚窗口到物理引擎`);
+              this.pendingCaptures.delete(captureId);
+              
+              // ✅ 从防护集合中移除（允许再次捕获）
+              this.capturedWindowsSet.delete(collision.windowId);
+              
+              // 重新添加窗口到物理引擎
+              this.physicsEngine.addWindow(windowData);
+              console.log(`   🔄 [窗口回滚] 窗口 ${collision.windowId.slice(0, 8)} 已恢复，解除捕获锁定`);
+              
+              // 更新统计
+              this.captureStats.timeout++;
+            }
+          }, confirmTimeout);
+          
+          // 记录待确认的捕获
+          this.pendingCaptures.set(captureId, {
+            windowData,
+            timestamp: Date.now(),
+            timeoutId
+          });
+          
+          // ✅ 步骤7: 设置墙壁动画锁（防止动画播放期间新窗口被捕获）
+          const moveSpeed = parseInt(this.config.wall_capture_move_speed || '500');
+          const captureDuration = parseInt(this.config.wall_capture_duration || '3000');
+          const animationDuration = moveSpeed + captureDuration + 1000; // 总时长 + 1秒缓冲
+          
+          this.wallAnimationLocks[collision.edge] = {
+            windowId: collision.windowId,
+            startTime: Date.now(),
+            duration: animationDuration
+          };
+          
+          if (this.config.enable_debug_logs === '1') {
+            console.log(`🔒 [设置锁] ${collision.edge} 墙已锁定 ${animationDuration}ms (动画播放中)`);
+          }
+        }
+      }
+    }
+    
+    // 处理完成，标记为可以接受新的调度
+    this.isProcessingCollisions = false;
+    
+    // 如果队列中又有新的碰撞，继续处理
+    if (this.collisionQueue.length > 0) {
+      this.scheduleCollisionProcessing();
+    }
+  }
+
+  /**
    * ✅ 手动清理过期的墙壁锁（用于异常情况）
    */
   cleanupExpiredLocks() {
@@ -648,7 +859,9 @@ export class WindowManager {
         if (elapsed >= lock.duration) {
           this.wallAnimationLocks[edge] = null;
           cleaned++;
-          console.log(`🧹 [清理过期锁] ${edge} 墙的锁已清理`);
+          if (this.config.enable_debug_logs === '1') {
+            console.log(`🧹 [清理过期锁] ${edge} 墙的锁已清理`);
+          }
         }
       }
     }
